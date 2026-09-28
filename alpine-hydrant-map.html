@@ -927,6 +927,7 @@ H.forEach(h=>{
   const m=L.circleMarker([h.y,h.x],o);
   m.bindPopup(()=>popupHtml(h),{maxWidth:300,autoPan:false});
   m.bindTooltip(esc(h.n.replace(/ - PW$/,'')),{permanent:true,direction:'right',offset:[8,0],className:'hl'});
+  m.on('click',pauseFollowing);
   m._h=h;h._m=m;m._key=key;groups[key].addLayer(m);markers.push(m);
 });
 function styleMarkers(){
@@ -1063,6 +1064,7 @@ function fitPadded(bb,maxZ){
   map.fitBounds(bb,{paddingTopLeft:wide?[300,30]:[20,90],paddingBottomRight:wide?[390,30]:[20,sheet.offsetHeight+30],maxZoom:maxZ,animate:true});
 }
 function selectHydrant(h){
+  pauseFollowing();
   hiLayer.clearLayers();
   hiLayer.addLayer(L.circleMarker([h.y,h.x],{renderer:routeRend,radius:14,color:BLUE,weight:3,fill:false,interactive:false}));
   if(!map.hasLayer(groups[h.c]))groups[h.c].addTo(map);
@@ -1103,14 +1105,21 @@ function findNear(lat,lon,fromMe,acc,center){
     +(s.d>250?'<div class="warn">This spot is about '+fmtFt(s.d)+' from the nearest mapped street; that distance is included.</div>':'')
     +'<ul>'+items+'</ul><div class="actions"><button class="btn" id="done">Clear</button></div>');
   panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
-  $('done').onclick=()=>{clearMarks();idle();stopTracking();};
+  $('done').onclick=()=>{clearMarks();idle();pauseFollowing();};
   const bb=L.latLngBounds([[lat,lon]]);top.forEach(c=>{bb.extend([c.h.y,c.h.x]);(c.pts||[]).forEach(p=>bb.extend(p));});
   if(center==='fit')fitPadded(bb,18);           // first fix, or resuming after a pan: frame the routes
   else if(center==='pan')map.panTo([lat,lon]);   // later ticks while following: just recentre, keep zoom
 }
 let watchId=null,following=false,needsFit=false,lastFix=null;
-function stopTracking(){ // fully pause GPS: no more dot/list updates until "My location" is pressed again
-  following=false;$('locate').classList.remove('following','busy');
+// The blue dot always keeps tracking once started. Clicking a hydrant or an
+// empty spot, or dragging the map, only stops the CAMERA from following it
+// -- the position keeps updating in the background until "My location" is
+// pressed again.
+function pauseFollowing(){
+  if(following){following=false;$('locate').classList.remove('following');}
+}
+function stopTrackingHard(){ // real GPS failure (e.g. permission denied): actually stop
+  pauseFollowing();$('locate').classList.remove('busy');
   if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
 }
 function applyFix(p){
@@ -1134,8 +1143,7 @@ function locateFail(err){
   // a stale fix is still on screen and the watch is still running: don't tear down
   // following over one bad tick, just leave things as they are.
   if(err.code!==1&&lastFix)return;
-  following=false;btn.classList.remove('following');
-  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  stopTrackingHard();
   const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   const msg=err.code===1
     ?(ios?'Location is turned off for this page. On iPhone: Settings &rsaquo; Privacy &amp; Security &rsaquo; Location Services &rsaquo; Safari Websites &rarr; <b>While Using</b>. Then in Safari tap <b>aA</b> &rsaquo; Website Settings &rsaquo; Location &rarr; <b>Allow</b>, and reload.'
@@ -1170,7 +1178,7 @@ let popClosed=0;
 map.on('popupclose',()=>{popClosed=Date.now();});
 map.on('click',e=>{
   if(Date.now()-popClosed<80)return; // this click only dismissed a popup
-  stopTracking(); // a manual tap means "I'm looking at this spot", not the GPS fix, until asked again
+  pauseFollowing(); // a manual tap means "I'm looking at this spot" for now, but the dot keeps moving
   findNear(e.latlng.lat,e.latlng.lng,false);
 });
 window.addEventListener('resize',setSheetH);
