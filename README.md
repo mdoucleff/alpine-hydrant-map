@@ -48,7 +48,6 @@ Built for the Alpine Fire Department.
 | `hydrant-icon.png` | Home-screen / install icon. |
 | `Alpine Hydrants_9_23_26_Update.kmz` | Source of hydrant/tank locations and status. |
 | `tl_2024_48043_roads.zip` | U.S. Census Bureau TIGER/Line 2024 road centerlines for Brewster County &mdash; the map's street basemap and its routing graph. |
-| `DESIGN.md` | Design notes from the project's original scope (a private, OSM-geocoded, photo-transcription snapshot). Kept as historical record; the map actually built and shipped here diverged from it in data source, hosting, and features. |
 
 Reference only &mdash; not surveyed. Hydrant status and locations should be
 confirmed against city records before operational use.
