@@ -1,0 +1,13 @@
+{
+  "name": "Alpine, TX Fire Hydrants",
+  "short_name": "Alpine Hydrants",
+  "description": "Fire hydrant locations for Alpine, TX, with nearest-hydrant search. Works offline after the first visit.",
+  "start_url": "./alpine-hydrant-map.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f1eee6",
+  "theme_color": "#c8102e",
+  "icons": [
+    { "src": "hydrant-icon.png", "sizes": "192x192", "type": "image/png" }
+  ]
+}
