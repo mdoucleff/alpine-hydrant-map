@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alpine TX Hydrant Map</title>
+<script>
+// Build the manifest at runtime so start_url/scope/icon always point at
+// wherever this page actually is — not a filename we guessed at build
+// time. Whatever URL just loaded successfully is, by definition, a URL
+// that works, so that's what an installed shortcut should reopen.
+(function(){
+  try{
+    var here=location.href.split('#')[0].split('?')[0];
+    var dir=here.slice(0,here.lastIndexOf('/')+1);
+    var m={
+      name:"Alpine, TX Fire Hydrants",
+      short_name:"Alpine Hydrants",
+      description:"Fire hydrant locations for Alpine, TX, with nearest-hydrant search. Works offline after the first visit.",
+      start_url:here,
+      scope:dir,
+      display:"standalone",
+      background_color:"#f1eee6",
+      theme_color:"#c8102e",
+      icons:[{src:dir+"hydrant-icon.png",sizes:"192x192",type:"image/png"}]
+    };
+    var url=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:"application/json"}));
+    var link=document.createElement('link');
+    link.rel='manifest';link.href=url;
+    document.head.appendChild(link);
+  }catch(e){}
+})();
+</script>
+<meta name="theme-color" content="#c8102e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Alpine Hydrants">
+<link rel="apple-touch-icon" href="./hydrant-icon.png">
+<link rel="icon" href="./hydrant-icon.png">
+<style>
+/*LEAFLET_CSS*/
+</style>
+<style>
+:root{
+  --paper:#f1eee6; --street:#ffffff; --minor:#fbfaf6; --track:#a9a394; --label:#4a463e; --label-halo:#f1eee6;
+  --panel:#ffffff; --ink:#1d1c1a; --muted:#6b675e; --line:#dcd7cb; --accent:#c8102e; --ring:#1d1c1a;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#1b1d20; --street:#3a3e44; --street-edge:#101214; --minor:#2c3035; --track:#4a4d52; --label:#b9bcc2; --label-halo:#1b1d20;
+    --panel:#25282c; --ink:#eceae4; --muted:#9a9a9a; --line:#3a3e44; --ring:#ffffff;
+  }
+}
+:root{ --street-edge:#b4aea3; }
+@media (prefers-color-scheme: dark){ :root{ --street-edge:#101214; } }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--paper);color:var(--ink);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#map{position:absolute;inset:0;background:var(--paper);outline:none}
+.leaflet-container{background:var(--paper);font:inherit}
+#labels{position:absolute;left:0;top:0;pointer-events:none}
+.panel{position:absolute;z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+#info{top:12px;left:12px;width:270px;max-width:calc(100vw - 24px);padding:12px 14px}
+#info h1{font-size:16px;margin:0 0 2px;letter-spacing:.2px}
+#info .sub{color:var(--muted);font-size:12px;margin-bottom:10px}
+#q{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--ink);font:inherit}
+#q:focus{outline:2px solid var(--accent);outline-offset:0}
+#msg{font-size:12px;color:var(--muted);min-height:16px;margin:4px 0 6px}
+.legend label{display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;user-select:none}
+.legend .n{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+.sw{width:14px;height:14px;border-radius:50%;border:2px solid var(--ring);box-shadow:0 0 0 1px rgba(0,0,0,.45);flex:none}
+.sw.sq{border-radius:2px}
+details{margin-top:8px;font-size:12px;color:var(--muted)}
+summary{cursor:pointer;color:var(--ink)}
+details ul{margin:6px 0 0;padding-left:16px}
+#fab{position:absolute;z-index:1000;right:12px;bottom:calc(var(--sheet-h,0px) + 34px);display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+#fab button{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--line);border-radius:22px;background:var(--panel);color:var(--ink);font:inherit;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+#fab #locate{background:#1a73e8;border-color:#1a73e8;color:#fff}
+#locate.busy svg{animation:spin 1s linear infinite}
+#locate.following{box-shadow:0 0 0 3px rgba(26,115,232,.45),0 2px 10px rgba(0,0,0,.18)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#locate.busy svg{animation:none}}
+#sheet{top:12px;right:56px;width:330px;max-height:calc(100% - 150px);overflow:auto;padding:12px 14px}
+#sheet h2{margin:0 0 2px;font-size:16px}
+#sheet p{margin:4px 0 8px;color:var(--muted);font-size:12.5px;line-height:1.4}
+#sheet ul{list-style:none;margin:0;padding:0}
+#sheet li button{width:100%;display:grid;grid-template-columns:26px 1fr auto;gap:1px 8px;align-items:center;text-align:left;padding:8px 4px;border:0;border-top:1px solid var(--line);background:transparent;color:inherit;font:inherit;cursor:pointer}
+#sheet li button:hover,#sheet li button:focus-visible{background:color-mix(in srgb,var(--ink) 7%,transparent);outline:none}
+.rank{grid-row:span 2;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--line);font-size:12px;font-weight:700}
+.rank.first{background:#1a73e8;color:#fff}
+#sheet .t{font-weight:700}
+#sheet .t small{font-weight:600;color:#a15c00;margin-left:4px}
+#sheet .dist{grid-row:span 2;text-align:right;font-weight:700;white-space:nowrap}
+#sheet .dist small{display:block;font-weight:500;color:var(--muted);font-size:11px}
+#sheet .s{grid-column:2;color:var(--muted);font-size:12px}
+#sheet .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;padding:8px 14px;border-radius:18px;border:1.5px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.btn.primary{background:#1a73e8;border-color:#1a73e8;color:#fff}
+.warn{margin:6px 0;padding:6px 8px;border-radius:6px;background:color-mix(in srgb,#e8a100 22%,transparent);font-size:12px}
+.me{width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 2px rgba(26,115,232,.4),0 1px 4px rgba(0,0,0,.5)}
+.pin{width:20px;height:20px;border-radius:50%;background:#fff;border:5px solid #1a73e8;box-shadow:0 1px 5px rgba(0,0,0,.5)}
+#info h1{cursor:default}
+@media (max-width:760px){
+  #sheet{top:auto;left:0;right:0;bottom:0;width:auto;max-height:46vh;border-radius:14px 14px 0 0}
+  #info h1{cursor:pointer}
+  #info h1::after{content:" \25BE";color:var(--muted)}
+  #info.compact h1::after{content:" \25B8"}
+  #info.compact .legend,#info.compact details,#info.compact #msg{display:none}
+  #credit{display:none}
+}
+#credit{position:absolute;z-index:1000;left:0;right:0;bottom:0;padding:2px 8px;font-size:11px;color:var(--muted);background:color-mix(in srgb,var(--paper) 80%,transparent);pointer-events:none}
+.leaflet-control-scale{margin-bottom:22px!important}
+.leaflet-control-zoom{margin-right:12px!important;margin-top:12px!important}
+.leaflet-tooltip.hl{background:var(--panel);color:var(--ink);border:1px solid var(--line);box-shadow:none;padding:0 4px;font-weight:600;font-size:11px;line-height:15px;display:none}
+.leaflet-tooltip.hl::before{display:none}
+.showlabels .leaflet-tooltip.hl{display:block}
+.pop h3{margin:0 0 4px;font-size:15px}
+.pop .row{color:var(--muted);font-size:12px}
+.pop a{color:var(--accent)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--ink)}
+@media (max-width:520px){ #info{width:auto;right:12px} .leaflet-control-zoom{display:none} }
+</style>
+</head>
+<body>
+<div id="map" aria-label="Map of Alpine, Texas with fire hydrants"></div>
+
+<div id="info" class="panel">
+  <h1>Alpine, TX &mdash; Fire Hydrants</h1>
+  <div class="sub" id="sub"></div>
+  <input id="q" type="search" placeholder="Hydrant # or street" autocomplete="off" aria-label="Find hydrant or street">
+  <div id="msg"></div>
+  <div class="legend" id="legend"></div>
+  <details>
+    <summary>Data notes</summary>
+    <ul id="notes"></ul>
+  </details>
+</div>
+<section id="sheet" class="panel" aria-live="polite"><div id="panel"></div></section>
+<div id="fab">
+  <button id="locate" aria-label="Find hydrants near my location"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>My location</span></button>
+  <button id="fit">Fit Alpine</button>
+</div>
+<div id="credit">Streets: U.S. Census Bureau TIGER/Line 2024, Brewster County &middot; Hydrants: Alpine Hydrants_9_23_26_Update.kmz &middot; Reference only, not surveyed</div>
+
+<script>
+/*LEAFLET_JS*/
+</script>
+<script>
+const H=/*HYDRANTS*/;
+const RN=/*ROADNAMES*/;
+const R=/*ROADS*/;
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+const map=L.map('map',{zoomSnap:.5,zoomDelta:.5,minZoom:11,maxZoom:20,preferCanvas:true,zoomControl:false,attributionControl:false});
+L.control.zoom({position:'topright'}).addTo(map);
+L.control.scale({imperial:true,metric:false,position:'bottomleft'}).addTo(map);
+
+/* ---------- roads (TIGER/Line) ---------- */
+// MTFCC classes: base widths in px at zoom 15
+const CLS={S1100:6,S1200:5,S1400:3.6,S1630:3.6,S1640:2.4,S1730:1.6,S1780:1.8,S1500:1.4,S1740:1.4,S1750:1.6};
+const DASH={S1500:'5 4',S1740:'2 4'};
+map.createPane('roads').style.zIndex=300;
+map.createPane('hydrants').style.zIndex=500;
+const roadRend=L.canvas({pane:'roads',padding:.4});
+const hydRend=L.canvas({pane:'hydrants',padding:.4});
+const casings=[],fills=[];
+R.forEach(r=>{
+  const ll=[];for(let i=0;i<r[2].length;i+=2)ll.push([r[2][i+1],r[2][i]]);
+  const c=r[1];
+  casings.push({l:L.polyline(ll,{renderer:roadRend,interactive:false,lineCap:'round',lineJoin:'round'}),c});
+  fills.push({l:L.polyline(ll,{renderer:roadRend,interactive:false,lineCap:'round',lineJoin:'round'}),c});
+});
+const roadGroup=L.layerGroup(casings.map(x=>x.l).concat(fills.map(x=>x.l))).addTo(map);
+function styleRoads(){
+  const z=map.getZoom(),k=Math.max(.45,Math.min(5,Math.pow(2,(z-15)*.6)));
+  const edge=css('--street-edge'),st=css('--street'),mn=css('--minor'),tr=css('--track');
+  casings.forEach(o=>{
+    const track=DASH[o.c];
+    o.l.setStyle({color:edge,weight:track?0:(CLS[o.c]||1.6)*k+1.8,opacity:1,dashArray:null});
+  });
+  fills.forEach(o=>{
+    const w=(CLS[o.c]||1.6)*k,track=DASH[o.c];
+    const minor=o.c==='S1730'||o.c==='S1780'||o.c==='S1640';
+    o.l.setStyle({color:track?tr:(minor?mn:st),weight:Math.max(w,.8),opacity:1,dashArray:track?DASH[o.c]:null});
+  });
+}
+
+/* ---------- street labels (canvas overlay) ---------- */
+const lpane=map.createPane('labels');lpane.style.zIndex=350;lpane.style.pointerEvents='none';
+const cv=document.createElement('canvas');cv.id='labels';lpane.appendChild(cv);const cx=cv.getContext('2d');
+const LABELED=new Set(['S1100','S1200','S1400','S1630']);
+const labelSegs=R.filter(r=>r[0]>=0&&LABELED.has(r[1])).map(r=>({n:RN[r[0]],p:r[2],major:r[1]==='S1200'||r[1]==='S1100'}));
+let raf=0;
+function drawLabels(){
+  raf=0;
+  const s=map.getSize(),dpr=window.devicePixelRatio||1;
+  if(cv.width!==s.x*dpr||cv.height!==s.y*dpr){cv.width=s.x*dpr;cv.height=s.y*dpr;cv.style.width=s.x+'px';cv.style.height=s.y+'px';}
+  L.DomUtil.setPosition(cv,map.containerPointToLayerPoint([0,0]));
+  cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,s.x,s.y);
+  const z=map.getZoom();document.body.classList.toggle('showlabels',z>=16.5);
+  if(z<14.5)return;
+  const b=map.getBounds().pad(.1),placed=[];
+  const fs=Math.round(10+Math.min(3,(z-15)*1.2));
+  cx.font='600 '+fs+'px system-ui,sans-serif';cx.textAlign='center';cx.textBaseline='middle';
+  cx.lineJoin='round';cx.lineWidth=3;cx.strokeStyle=css('--label-halo');cx.fillStyle=css('--label');
+  const cand=[];
+  for(const r of labelSegs){
+    if(z<15.5&&!r.major)continue;
+    const p=r.p;let best=null,bl=0;
+    for(let i=0;i<p.length-2;i+=2){
+      const mx=(p[i]+p[i+2])/2,my=(p[i+1]+p[i+3])/2;
+      if(!b.contains([my,mx]))continue;
+      const a=map.latLngToContainerPoint([p[i+1],p[i]]),c=map.latLngToContainerPoint([p[i+3],p[i+2]]);
+      const len=Math.hypot(c.x-a.x,c.y-a.y);
+      if(len>bl){bl=len;best={a,c};}
+    }
+    if(best)cand.push({n:r.n,len:bl,a:best.a,c:best.c,major:r.major});
+  }
+  cand.sort((x,y)=>y.len-x.len);
+  for(const o of cand){
+    const w=cx.measureText(o.n).width;
+    if(o.len<w+14)continue;
+    const mx=(o.a.x+o.c.x)/2,my=(o.a.y+o.c.y)/2;
+    if(mx<-20||my<-20||mx>s.x+20||my>s.y+20)continue;
+    let ang=Math.atan2(o.c.y-o.a.y,o.c.x-o.a.x);
+    if(ang>Math.PI/2||ang<-Math.PI/2)ang+=Math.PI;
+    const ca=Math.abs(Math.cos(ang)),sa=Math.abs(Math.sin(ang));
+    const hw=(w*ca+fs*sa)/2+4,hh=(w*sa+fs*ca)/2+3;
+    if(placed.some(q=>Math.abs(q.x-mx)<q.hw+hw&&Math.abs(q.y-my)<q.hh+hh))continue;
+    placed.push({x:mx,y:my,hw,hh});
+    cx.save();cx.translate(mx,my);cx.rotate(ang);cx.strokeText(o.n,0,0);cx.fillText(o.n,0,0);cx.restore();
+  }
+}
+const sched=()=>{if(!raf)raf=requestAnimationFrame(drawLabels)};
+
+/* ---------- hydrants ---------- */
+const CAT={
+  red:   {label:'Good',                fill:'#e60000'},
+  black: {label:'Not Working',         fill:'#000000'},
+  yellow:{label:'Low Pressure',        fill:'#ffff00'},
+  purple:{label:'Storage Supply Tank', fill:'#a900e6'}
+};
+const groups={};Object.keys(CAT).forEach(k=>groups[k]=L.layerGroup().addTo(map));
+const counts={};
+const markers=[];
+function popupHtml(h){
+  const kind=h.t?'Storage tank / supply':'Hydrant';
+  const near=h.s.filter((s,i)=>i===0||s[1]<=60).map(s=>esc(s[0])+' <span class="row">('+s[1]+' m)</span>').join(' &middot; ');
+  const ll=h.y.toFixed(6)+', '+h.x.toFixed(6);
+  return '<div class="pop"><h3>'+esc(h.n)+'</h3><div class="row">'+kind+' &middot; Status: '+CAT[h.c].label+'</div>'
+   +(near?'<div style="margin-top:6px">Near: '+near+'</div>':'')
+   +'<div class="row" style="margin-top:6px">'+ll+' &middot; <a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+h.y+','+h.x+'">Google Maps</a></div></div>';
+}
+H.forEach(h=>{
+  const key=h.c;counts[key]=(counts[key]||0)+1;
+  const o={renderer:hydRend,radius:h.t?7:6,fillColor:CAT[key].fill,fillOpacity:1,color:css('--ring'),weight:2};
+  o.bubblingMouseEvents=false;
+  const m=L.circleMarker([h.y,h.x],o);
+  m.bindPopup(()=>popupHtml(h),{maxWidth:300,autoPan:false});
+  m.bindTooltip(esc(h.n.replace(/ - PW$/,'')),{permanent:true,direction:'right',offset:[8,0],className:'hl'});
+  m._h=h;h._m=m;m._key=key;groups[key].addLayer(m);markers.push(m);
+});
+function styleMarkers(){
+  const z=map.getZoom(),r=Math.max(3,Math.min(9,3+(z-13)*1.1));
+  markers.forEach(m=>{m.setStyle({color:css('--ring'),weight:z>=15?2:1.2});m.setRadius(m._h.t?r+1.5:r);});
+}
+
+/* ---------- legend ---------- */
+const lg=$('legend');
+Object.keys(CAT).forEach(k=>{
+  if(!counts[k])return;
+  const l=document.createElement('label');
+  l.innerHTML='<input type="checkbox" checked><span class="sw'+''+'" style="background:'+CAT[k].fill+'"></span>'+CAT[k].label+'<span class="n">'+counts[k]+'</span>';
+  l.querySelector('input').addEventListener('change',e=>{e.target.checked?groups[k].addTo(map):map.removeLayer(groups[k]);});
+  lg.appendChild(l);
+});
+const nHyd=H.filter(h=>!h.t).length;
+$('sub').textContent=nHyd+' hydrants + '+(H.length-nHyd)+' storage tanks';
+
+/* data notes (computed from the file, not hard-coded) */
+const seen={},dup=[];
+H.forEach(h=>{if(h.t)return;(seen[h.n]=seen[h.n]||[]).push(h)});
+Object.keys(seen).forEach(k=>{if(seen[k].length>1)dup.push(k+' appears '+seen[k].length+' times')});
+const ids=new Set(H.map(h=>{const m=/^H(\d+)/.exec(h.n);return m?+m[1]:0}));
+const maxId=Math.max(...ids),gaps=[];for(let i=1;i<=maxId;i++)if(!ids.has(i))gaps.push(i);
+const notes=$('notes');
+[dup.length?'Duplicate name: '+dup.join('; ')+' (both are plotted)':'',
+ gaps.length?'No point in the KMZ for: H'+gaps.join(', H'):'',
+ 'Status is taken from the KMZ symbol color: red = Good, black = Not Working, yellow = Low Pressure, purple = Storage Supply Tank.',
+ 'Closest-hydrant search skips hydrants marked Not Working; Storage Supply Tanks are included.',
+ 'Street distances follow the TIGER street network; they are estimates, not driving or hose-lay measurements.',
+ 'Positions are as drawn in the KMZ. This is a reference map, not a survey.'
+].filter(Boolean).forEach(t=>{const li=document.createElement('li');li.textContent=t;notes.appendChild(li)});
+
+/* ---------- search ---------- */
+const norm=s=>s.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+$('q').addEventListener('input',e=>{
+  const q=norm(e.target.value),msg=$('msg');msg.textContent='';
+  if(!q)return;
+  const num=/^h?\s*(\d+)$/.exec(q);
+  let hits=[];
+  if(num)hits=markers.filter(m=>m._h.n.toLowerCase().replace(/[^a-z0-9]/g,'').replace(/pw$/,'')==='h'+num[1]);
+  else hits=markers.filter(m=>norm(m._h.n).includes(q));
+  if(!hits.length&&!num){
+    // street search: hydrants within 60 m of that street
+    hits=markers.filter(m=>m._h.s.some(s=>s[1]<=60&&norm(s[0]).includes(q)));
+    if(hits.length)msg.textContent=hits.length+' hydrant'+(hits.length>1?'s':'')+' near that street';
+  }
+  if(!hits.length){msg.textContent='No match';return;}
+  hits.forEach(m=>{if(!map.hasLayer(groups[m._key]))groups[m._key].addTo(map)});
+  const b=L.latLngBounds(hits.map(m=>m.getLatLng()));
+  if(hits.length===1){map.setView(hits[0].getLatLng(),Math.max(map.getZoom(),18));hits[0].openPopup();}
+  else map.fitBounds(b.pad(.25),{maxZoom:18});
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('q').value='';$('msg').textContent='';map.closePopup();clearMarks();idle();}});
+
+/* ---------- routing graph (built from the TIGER streets) ---------- */
+const FT=3.28084,LAT0=30.365,KY=110574*FT,KX=111320*Math.cos(LAT0*Math.PI/180)*FT;
+const toFt=(lat,lon)=>[lon*KX,lat*KY];
+const toLL=(x,y)=>[y/KY,x/KX];
+const nodeIdx=new Map(),NX=[],NY=[],ADJ=[],EA=[],EB=[],EW=[];
+function gnode(lon,lat){
+  const k=Math.round(lon*1e5)+','+Math.round(lat*1e5);let i=nodeIdx.get(k);
+  if(i===undefined){i=NX.length;nodeIdx.set(k,i);const f=toFt(lat,lon);NX.push(f[0]);NY.push(f[1]);ADJ.push([]);}
+  return i;
+}
+R.forEach(r=>{
+  if(r[1]==='S1500')return; // 4WD trails are not routed
+  const p=r[2];let prev=gnode(p[0],p[1]);
+  for(let i=2;i<p.length;i+=2){
+    const n=gnode(p[i],p[i+1]);
+    if(n!==prev){const w=Math.hypot(NX[n]-NX[prev],NY[n]-NY[prev]);EA.push(prev);EB.push(n);EW.push(w);ADJ[prev].push([n,w]);ADJ[n].push([prev,w]);}
+    prev=n;
+  }
+});
+const NN=NX.length;
+function snap(x,y){
+  let best=null,bd=Infinity;
+  for(let e=0;e<EA.length;e++){
+    const ax=NX[EA[e]],ay=NY[EA[e]],dx=NX[EB[e]]-ax,dy=NY[EB[e]]-ay,l2=dx*dx+dy*dy||1;
+    let t=((x-ax)*dx+(y-ay)*dy)/l2;t=t<0?0:t>1?1:t;
+    const px=ax+t*dx,py=ay+t*dy,d=(px-x)*(px-x)+(py-y)*(py-y);
+    if(d<bd){bd=d;best={e,t,px,py};}
+  }
+  best.d=Math.sqrt(bd);return best;
+}
+function route(s){
+  const dist=new Float64Array(NN).fill(Infinity),prev=new Int32Array(NN).fill(-1),done=new Uint8Array(NN),heap=[];
+  const push=(d,n)=>{heap.push([d,n]);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p][0]<=heap[i][0])break;[heap[p],heap[i]]=[heap[i],heap[p]];i=p;}};
+  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<heap.length&&heap[l][0]<heap[m][0])m=l;if(r<heap.length&&heap[r][0]<heap[m][0])m=r;if(m===i)break;[heap[m],heap[i]]=[heap[i],heap[m]];i=m;}}return top;};
+  const a=EA[s.e],b=EB[s.e],w=EW[s.e];
+  dist[a]=s.t*w;push(dist[a],a);
+  if((1-s.t)*w<dist[b]){dist[b]=(1-s.t)*w;push(dist[b],b);}
+  while(heap.length){
+    const [d,n]=pop();if(done[n])continue;done[n]=1;
+    for(const [m,ww] of ADJ[n]){const nd=d+ww;if(nd<dist[m]){dist[m]=nd;prev[m]=n;push(nd,m);}}
+  }
+  return {dist,prev};
+}
+function cost(s,rt,h){
+  const sn=h.sn,a=EA[sn.e],b=EB[sn.e],w=EW[sn.e];
+  let best=rt.dist[a]+sn.t*w,via=a;
+  const cb=rt.dist[b]+(1-sn.t)*w;if(cb<best){best=cb;via=b;}
+  if(sn.e===s.e){const c=Math.abs(sn.t-s.t)*w;if(c<best){best=c;via=-1;}}
+  return {road:best+s.d+sn.d,via};
+}
+function pathTo(s,rt,via,h,ll){
+  const pts=[ll,toLL(s.px,s.py)];
+  if(via>=0){const ch=[];for(let n=via;n!==-1;n=rt.prev[n])ch.push(n);ch.reverse().forEach(n=>pts.push(toLL(NX[n],NY[n])));}
+  pts.push(toLL(h.sn.px,h.sn.py));pts.push([h.y,h.x]);return pts;
+}
+// eligible for "closest": everything except Not Working (Good, Low Pressure, Storage Supply Tank)
+const CAND=H.filter(h=>h.c!=='black');
+CAND.forEach(h=>{h.ft=toFt(h.y,h.x);h.sn=snap(h.ft[0],h.ft[1]);});
+
+/* ---------- nearest-hydrant UI ---------- */
+map.createPane('routes').style.zIndex=450;
+const routeRend=L.canvas({pane:'routes',padding:.4});
+const routeLayer=L.layerGroup().addTo(map),hiLayer=L.layerGroup().addTo(map);
+const panel=$('panel'),sheet=$('sheet');
+const BLUE='#1a73e8';
+const fmtFt=f=>{const v=Math.round(f/10)*10;return (v<10?Math.round(f):v).toLocaleString()+' ft'};
+const bearing=(dx,dy)=>["N","NE","E","SE","S","SW","W","NW"][Math.round(((Math.atan2(dx,dy)*180/Math.PI)+360)%360/45)%8];
+const nearTxt=h=>h.s.filter((s,i)=>i===0||s[1]<=60).slice(0,2).map(s=>s[0]).join(' & ');
+function setSheetH(){document.documentElement.style.setProperty('--sheet-h',(window.innerWidth>760?0:sheet.offsetHeight)+'px');}
+function show(html){panel.innerHTML=html;sheet.scrollTop=0;requestAnimationFrame(setSheetH);}
+let pin=null,me=null;
+function clearMarks(){routeLayer.clearLayers();hiLayer.clearLayers();if(pin){map.removeLayer(pin);pin=null;}}
+function idle(){
+  show('<h2>Closest hydrants</h2><p>Tap any spot on the map, or use your location, to see the three closest working hydrants or supply tanks and the street route to each.</p>');
+}
+function fitPadded(bb,maxZ){
+  const wide=window.innerWidth>760;
+  map.fitBounds(bb,{paddingTopLeft:wide?[300,30]:[20,90],paddingBottomRight:wide?[390,30]:[20,sheet.offsetHeight+30],maxZoom:maxZ,animate:true});
+}
+function selectHydrant(h){
+  hiLayer.clearLayers();
+  hiLayer.addLayer(L.circleMarker([h.y,h.x],{renderer:routeRend,radius:14,color:BLUE,weight:3,fill:false,interactive:false}));
+  if(!map.hasLayer(groups[h.c]))groups[h.c].addTo(map);
+  const m=h._m;
+  // only move the map if the hydrant is off-screen; otherwise leave the view alone
+  if(!map.getBounds().contains(m.getLatLng())){map.once('moveend',()=>m.openPopup());map.panTo(m.getLatLng());}
+  else m.openPopup();
+}
+function findNear(lat,lon,fromMe,acc,center){
+  clearMarks();
+  const [x,y]=toFt(lat,lon);
+  const cands=CAND.map(h=>({h,st:Math.hypot(h.ft[0]-x,h.ft[1]-y)}));
+  if(Math.min(...cands.map(c=>c.st))>8000){
+    show('<h2>Outside the hydrant map</h2><p>'+(fromMe?'Your location is':'That spot is')+' more than a mile and a half from any hydrant. Tap a spot in town instead.</p>');return;
+  }
+  if(!fromMe)pin=L.marker([lat,lon],{interactive:false,icon:L.divIcon({className:'',html:'<div class="pin"></div>',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(map);
+  const s=snap(x,y),rt=route(s);
+  cands.forEach(c=>{const r=cost(s,rt,c.h);c.road=r.road;c.via=r.via;c.key=isFinite(r.road)?r.road:1e9+c.st;});
+  cands.sort((p,q)=>p.key-q.key);
+  const top=cands.slice(0,3);
+  top.slice().reverse().forEach(c=>{
+    if(!isFinite(c.road))return;
+    const first=c===top[0],pts=pathTo(s,rt,c.via,c.h,[lat,lon]);
+    if(first)routeLayer.addLayer(L.polyline(pts,{renderer:routeRend,color:'#fff',weight:10,opacity:.9,interactive:false,lineCap:'round',lineJoin:'round'}));
+    routeLayer.addLayer(L.polyline(pts,{renderer:routeRend,color:BLUE,weight:first?6:3.5,opacity:first?.95:.75,dashArray:first?null:'7 7',interactive:false,lineCap:'round',lineJoin:'round'}));
+    c.pts=pts;
+  });
+  if(isFinite(top[0].road))routeLayer.addLayer(L.circleMarker([top[0].h.y,top[0].h.x],{renderer:routeRend,radius:14,color:BLUE,weight:3,fill:false,interactive:false}));
+  const items=top.map((c,i)=>{
+    const dir=bearing(c.h.ft[0]-x,c.h.ft[1]-y),near=nearTxt(c.h);
+    return '<li><button data-i="'+H.indexOf(c.h)+'"><span class="rank'+(i===0?' first':'')+'">'+(i+1)+'</span>'
+     +'<span class="t">'+esc(c.h.n)+(c.h.c==='yellow'?'<small>Low pressure</small>':c.h.c==='purple'?'<small>Storage supply tank</small>':'')+'</span>'
+     +'<span class="dist">'+(isFinite(c.road)?fmtFt(c.road)+'<small>by street</small>':'no route<small>street network</small>')+'</span>'
+     +'<span class="s">'+(near?'near '+esc(near)+' &middot; ':'')+fmtFt(c.st)+' '+dir+' straight line</span></button></li>';
+  }).join('');
+  show('<h2>Closest hydrants</h2><p>'+(fromMe?'From your location'+(acc?' (&plusmn;'+fmtFt(acc*FT)+')':''):'From the blue pin')
+    +'. Distances follow the streets. Hydrants marked Not Working are skipped.</p>'
+    +(s.d>250?'<div class="warn">This spot is about '+fmtFt(s.d)+' from the nearest mapped street; that distance is included.</div>':'')
+    +'<ul>'+items+'</ul><div class="actions"><button class="btn" id="done">Clear</button></div>');
+  panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
+  $('done').onclick=()=>{clearMarks();idle();stopTracking();};
+  const bb=L.latLngBounds([[lat,lon]]);top.forEach(c=>{bb.extend([c.h.y,c.h.x]);(c.pts||[]).forEach(p=>bb.extend(p));});
+  if(center==='fit')fitPadded(bb,18);           // first fix, or resuming after a pan: frame the routes
+  else if(center==='pan')map.panTo([lat,lon]);   // later ticks while following: just recentre, keep zoom
+}
+let watchId=null,following=false,needsFit=false,lastFix=null;
+function stopTracking(){ // fully pause GPS: no more dot/list updates until "My location" is pressed again
+  following=false;$('locate').classList.remove('following','busy');
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+}
+function applyFix(p){
+  lastFix=p;
+  const btn=$('locate');
+  btn.classList.remove('busy');
+  try{
+    const ll=[p.coords.latitude,p.coords.longitude];
+    if(me)map.removeLayer(me);
+    me=L.layerGroup([
+      L.circle(ll,{radius:p.coords.accuracy||0,renderer:routeRend,color:BLUE,weight:1,fillColor:BLUE,fillOpacity:.12,interactive:false}),
+      L.marker(ll,{interactive:false,keyboard:false,icon:L.divIcon({className:'',html:'<div class="me"></div>',iconSize:[18,18],iconAnchor:[9,9]})})
+    ]).addTo(map);
+    findNear(ll[0],ll[1],true,p.coords.accuracy,following?(needsFit?'fit':'pan'):null);
+    needsFit=false;
+  }catch(e){show('<h2>Got your location, but the map failed</h2><p>'+esc(e&&e.message||e)+'</p>');}
+}
+function locateFail(err){
+  const btn=$('locate');
+  btn.classList.remove('busy');
+  // a stale fix is still on screen and the watch is still running: don't tear down
+  // following over one bad tick, just leave things as they are.
+  if(err.code!==1&&lastFix)return;
+  following=false;btn.classList.remove('following');
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const msg=err.code===1
+    ?(ios?'Location is turned off for this page. On iPhone: Settings &rsaquo; Privacy &amp; Security &rsaquo; Location Services &rsaquo; Safari Websites &rarr; <b>While Using</b>. Then in Safari tap <b>aA</b> &rsaquo; Website Settings &rsaquo; Location &rarr; <b>Allow</b>, and reload.'
+        :'Location permission is off for this page. Allow location for this site in your browser settings, or tap the map at your spot instead.')
+    :'Your location could not be found (no GPS fix). Try again outdoors or with Wi-Fi on, or tap the map at your spot instead.';
+  show('<h2>Location not available</h2><p>'+msg+'</p><p style="font-size:11px">Details: code '+err.code+(err.message?' &mdash; '+esc(err.message):'')+'</p>');
+}
+function locate(){
+  const btn=$('locate');
+  if(!navigator.geolocation){show('<h2>Location unavailable</h2><p>This browser can\'t share its location. Tap the map at your spot instead.</p>');return;}
+  if(!window.isSecureContext){
+    show('<h2>Location is blocked on this page</h2><p>Phones only share GPS with pages opened from a secure <b>https://</b> address. This page was opened from a file or an http:// address, which iPhone Safari refuses (Android is more lenient). Put the file on an https site and open it from there, or tap the map at your spot instead.</p>');return;
+  }
+  following=true;needsFit=true;btn.classList.add('following');
+  if(watchId!==null){ // already tracking (following was just paused by a manual pan): resume now
+    if(lastFix)applyFix(lastFix);
+    return;
+  }
+  btn.classList.add('busy');
+  // one quick fix first, so something shows up fast, then keep tracking continuously
+  navigator.geolocation.getCurrentPosition(applyFix,err=>{
+    if(err.code===1)return locateFail(err);
+    navigator.geolocation.getCurrentPosition(applyFix,locateFail,{enableHighAccuracy:false,timeout:20000,maximumAge:60000});
+  },{enableHighAccuracy:true,timeout:10000,maximumAge:15000});
+  watchId=navigator.geolocation.watchPosition(applyFix,locateFail,{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
+}
+$('locate').addEventListener('click',locate);
+map.on('dragstart',()=>{ // the user grabbed the map: stop auto-recentring until "My location" is pressed again
+  if(following){following=false;$('locate').classList.remove('following');}
+});
+let popClosed=0;
+map.on('popupclose',()=>{popClosed=Date.now();});
+map.on('click',e=>{
+  if(Date.now()-popClosed<80)return; // this click only dismissed a popup
+  stopTracking(); // a manual tap means "I'm looking at this spot", not the GPS fix, until asked again
+  findNear(e.latlng.lat,e.latlng.lng,false);
+});
+window.addEventListener('resize',setSheetH);
+if(window.innerWidth<=760)$('info').classList.add('compact');
+document.querySelector('#info h1').addEventListener('click',()=>{if(window.innerWidth<=760)$('info').classList.toggle('compact')});
+
+/* ---------- view ---------- */
+const core=H.filter(h=>!h.t&&h.x<-103.6);
+const coreBounds=L.latLngBounds(core.map(h=>[h.y,h.x]));
+const fit=()=>map.fitBounds(coreBounds.pad(.06));
+$('fit').addEventListener('click',fit);
+fit();
+styleRoads();styleMarkers();drawLabels();idle();
+locate(); // start tracking automatically; falls back to the idle/tap message if location is unavailable or denied
+map.on('zoomend',()=>{styleRoads();styleMarkers();sched();});
+map.on('move resize',sched);
+map.on('zoomstart',()=>cx.clearRect(0,0,cv.width,cv.height));
+const mq=window.matchMedia('(prefers-color-scheme: dark)');
+(mq.addEventListener?mq.addEventListener.bind(mq,'change'):mq.addListener.bind(mq))(()=>{styleRoads();styleMarkers();drawLabels();});
+})();
+</script>
+<script>
+// Register the offline service worker. This only works when the page is
+// served over https (or localhost) with sw.js reachable next to it —
+// browsers refuse service workers on file:// pages, and a plain double-click
+// open of this file will simply skip this block and work as before.
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    // tell the worker which exact URL to precache — see the comment in sw.js
+    navigator.serviceWorker.register('./sw.js?page=' + encodeURIComponent(location.pathname + location.search)).catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

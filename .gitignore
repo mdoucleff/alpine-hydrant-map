@@ -1,0 +1,4 @@
+# intermediate build artifacts -- regenerate with build/parse_sources.py
+build/cache/
+__pycache__/
+*.pyc
