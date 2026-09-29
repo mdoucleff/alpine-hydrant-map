@@ -210,8 +210,14 @@ def build_roads_and_streets(H):
 
         # Not near any intersection (mid-block, or the only nearby street
         # has nothing else close enough to cross it): still worth saying
-        # which side of that one street the hydrant is on.
-        if not h['corner'] and top:
+        # which side of that one street the hydrant is on -- but only if
+        # that one street is actually close. Some hydrants have nothing
+        # but unnamed local roads nearby (real roads, sometimes just a
+        # few metres away, but with no FULLNAME in TIGER to call them by),
+        # and without this check top[0] would silently be some named
+        # highway hundreds of metres off, with a side label that implies
+        # it's nearby when it isn't.
+        if not h['corner'] and top and top[0][1][0] <= 70:
             _, (dA, segA1, segA2) = top[0]
             px, py = point_on_segment(hx, hy, segA1[0], segA1[1], segA2[0], segA2[1])
             ns = 'N' if hy >= py else 'S'

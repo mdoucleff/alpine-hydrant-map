@@ -308,7 +308,11 @@ function popupHtml(h){
   // Lead with what's actually useful in the field: where it is and its
   // status. The internal ID and raw coordinates aren't shown -- neither
   // means anything without already having this map open.
-  const addr=h.s.length?esc(h.s[0][0])+(h.s[1]&&h.s[1][1]<=70?' &amp; '+esc(h.s[1][0]):''):'Location unknown';
+  // Some hydrants have nothing but unnamed local roads nearby (real
+  // roads, sometimes only metres away, just with no name in TIGER) --
+  // h.s[0] then ends up some named street hundreds of metres off, which
+  // would be misleading to show as if it were the nearest cross street.
+  const addr=(h.s.length&&h.s[0][1]<=70)?esc(h.s[0][0])+(h.s[1]&&h.s[1][1]<=70?' &amp; '+esc(h.s[1][0]):''):'Location unknown';
   // h.corner is '' (no clear intersection -- e.g. mid-block, no hint shown),
   // a 2-letter diagonal at a real 4-way (NE/NW/SE/SW), or a single letter
   // at a T where only one street continues through (N/S/E/W side of it).
@@ -448,7 +452,7 @@ const panel=$('panel'),sheet=$('sheet');
 const BLUE='#1a73e8';
 const fmtFt=f=>{const v=Math.round(f/10)*10;return (v<10?Math.round(f):v).toLocaleString()+' ft'};
 const bearing=(dx,dy)=>["N","NE","E","SE","S","SW","W","NW"][Math.round(((Math.atan2(dx,dy)*180/Math.PI)+360)%360/45)%8];
-const nearTxt=h=>h.s.filter((s,i)=>i===0||s[1]<=60).slice(0,2).map(s=>s[0]).join(' & ');
+const nearTxt=h=>h.s.filter((s,i)=>s[1]<=(i===0?70:60)).slice(0,2).map(s=>s[0]).join(' & ');
 function setSheetH(){document.documentElement.style.setProperty('--sheet-h',(window.innerWidth>760?0:sheet.offsetHeight)+'px');}
 function show(html){panel.innerHTML=html;sheet.scrollTop=0;requestAnimationFrame(setSheetH);}
 let pin=null,me=null;
