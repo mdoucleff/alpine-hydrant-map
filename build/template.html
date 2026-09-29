@@ -312,12 +312,14 @@ function popupHtml(h){
   // roads, sometimes only metres away, just with no name in TIGER) --
   // h.s[0] then ends up some named street hundreds of metres off, which
   // would be misleading to show as if it were the nearest cross street.
-  const addr=(h.s.length&&h.s[0][1]<=70)?esc(h.s[0][0])+(h.s[1]&&h.s[1][1]<=70?' &amp; '+esc(h.s[1][0]):''):'Location unknown';
+  // No usable named street nearby: skip the heading entirely rather than
+  // show a "Location unknown" label, which isn't actionable in the field.
+  const addr=(h.s.length&&h.s[0][1]<=70)?esc(h.s[0][0])+(h.s[1]&&h.s[1][1]<=70?' &amp; '+esc(h.s[1][0]):''):'';
   // h.corner is '' (no clear intersection -- e.g. mid-block, no hint shown),
   // a 2-letter diagonal at a real 4-way (NE/NW/SE/SW), or a single letter
   // at a T where only one street continues through (N/S/E/W side of it).
   const badge=h.corner?'<div class="cornerbadge">'+h.corner+(h.corner.length===2?' CORNER':' SIDE')+'</div>':'';
-  return '<div class="pop">'+badge+'<h3>'+addr+'</h3>'
+  return '<div class="pop">'+badge+(addr?'<h3>'+addr+'</h3>':'')
    +'<div class="status"><span class="dot" style="background:'+CAT[h.c].fill+'"></span>'+esc(CAT[h.c].label)+'</div>'
    +'<div class="row" style="margin-top:8px"><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+h.y+','+h.x+'">Directions</a></div></div>';
 }
