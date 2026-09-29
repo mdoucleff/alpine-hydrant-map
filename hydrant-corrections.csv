@@ -1,1 +1,3 @@
 action,name,status,lat,lon,tank,note
+remove,H226,,,,,
+remove,H192,,,,,
