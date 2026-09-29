@@ -421,6 +421,13 @@ function fitPadded(bb,maxZ,gpsLL){
   // jump -- e.g. the very first "zero in on GPS" on load, which those
   // would otherwise just snap to instantly with no visible animation.
   const zoom=map._getBoundsCenterZoom(bb,opts).zoom;
+  // A background GPS tick's plain panTo (see the 'pan' branch below) would
+  // otherwise interrupt this flyTo mid-animation -- Leaflet cancels a fly
+  // whenever any other view change comes in -- leaving the zoom stuck
+  // partway and needing another press of "My location" to finish getting
+  // there. `flying` blocks that panTo until this animation settles.
+  flying=true;
+  map.once('moveend',()=>{flying=false;});
   map.flyTo(gpsLL||bb.getCenter(),zoom);
 }
 function selectHydrant(h){
@@ -468,9 +475,9 @@ function findNear(lat,lon,fromMe,acc,center){
   $('done').onclick=()=>{clearMarks();idle();pauseFollowing();};
   const bb=L.latLngBounds([[lat,lon]]);top.forEach(c=>{bb.extend([c.h.y,c.h.x]);(c.pts||[]).forEach(p=>bb.extend(p));});
   if(center==='fit')fitPadded(bb,19,[lat,lon]); // first fix, or resuming after a pan: fit the routes, centred on the dot
-  else if(center==='pan')map.panTo([lat,lon]);   // later ticks while following: just recentre, keep zoom
+  else if(center==='pan'&&!flying)map.panTo([lat,lon]); // later ticks while following: just recentre, keep zoom (unless a flyTo from 'fit' is still landing)
 }
-let watchId=null,following=false,needsFit=false,lastFix=null;
+let watchId=null,following=false,needsFit=false,lastFix=null,flying=false;
 // The blue dot always keeps tracking once started. Clicking a hydrant or an
 // empty spot, or dragging the map, only stops the CAMERA from following it
 // -- the position keeps updating in the background until "My location" is
