@@ -2,3 +2,4 @@ action,name,status,lat,lon,tank,note
 remove,H226,,,,,
 remove,H192,,,,,
 add,New - E Ave A & N Walker St,Good,30.364299,-103.655579,no,
+add,New - E Nations St & N Harrison St,Good,30.365034,-103.654462,no,
