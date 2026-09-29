@@ -769,6 +769,12 @@ details ul{margin:6px 0 0;padding-left:16px}
   #credit{display:none}
 }
 #credit{position:absolute;z-index:1000;left:0;right:0;bottom:0;padding:2px 8px;font-size:11px;color:var(--muted);background:color-mix(in srgb,var(--paper) 80%,transparent);pointer-events:none}
+#disclaimer{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.55)}
+#disclaimer.hidden{display:none}
+#disclaimer .card{background:var(--panel);color:var(--ink);border-radius:14px;max-width:420px;width:100%;padding:22px 22px 18px;box-shadow:0 8px 40px rgba(0,0,0,.4)}
+#disclaimer h2{margin:0 0 10px;font-size:18px}
+#disclaimer p{margin:0 0 12px;font-size:14px;line-height:1.5;color:var(--ink)}
+#disclaimer .btn.primary{width:100%;justify-content:center;margin-top:6px;height:46px;font-size:15px}
 .leaflet-control-scale{margin-bottom:22px!important}
 .leaflet-control-zoom{margin-right:12px!important;margin-top:12px!important}
 .leaflet-tooltip.hl{background:var(--panel);color:var(--ink);border:1px solid var(--line);box-shadow:none;padding:0 4px;font-weight:600;font-size:11px;line-height:15px;display:none}
@@ -801,6 +807,14 @@ details ul{margin:6px 0 0;padding-left:16px}
   <button id="fit">Fit Alpine</button>
 </div>
 <div id="credit">Streets: U.S. Census Bureau TIGER/Line 2024, Brewster County &middot; Hydrants: Alpine Hydrants_9_23_26_Update.kmz &middot; Reference only, not surveyed</div>
+<div id="disclaimer" role="alertdialog" aria-modal="true" aria-labelledby="disc-h">
+  <div class="card">
+    <h2 id="disc-h">Before you use this map</h2>
+    <p>Hydrant locations, colors, and status come from city records and have <b>not</b> been independently field-verified. Some hydrants may be missing, mislabeled, in the wrong spot, or no longer there.</p>
+    <p>Confirm a hydrant's status and access in person before relying on it. Do not use this as the sole basis for an operational decision.</p>
+    <button id="disc-ok" class="btn primary">I understand &mdash; continue</button>
+  </div>
+</div>
 
 <script>
 /* @preserve
@@ -1199,7 +1213,27 @@ const fit=()=>map.fitBounds(coreBounds.pad(.06));
 $('fit').addEventListener('click',fit);
 fit();
 styleRoads();styleMarkers();drawLabels();idle();
-locate(); // start tracking automatically; falls back to the idle/tap message if location is unavailable or denied
+// Data-accuracy disclaimer: must be explicitly accepted once per device
+// before GPS tracking starts. Bump DISCLAIMER_VERSION to make it reappear
+// for everyone if the wording ever changes materially.
+const DISCLAIMER_VERSION='1';
+const disc=$('disclaimer');
+function startAfterDisclaimer(){
+  locate(); // start tracking automatically; falls back to the idle/tap message if location is unavailable or denied
+}
+let accepted=false;
+try{accepted=localStorage.getItem('hydrantDisclaimer')===DISCLAIMER_VERSION;}catch(e){}
+if(accepted){
+  disc.classList.add('hidden');
+  startAfterDisclaimer();
+}else{
+  disc.classList.remove('hidden');
+  $('disc-ok').addEventListener('click',()=>{
+    try{localStorage.setItem('hydrantDisclaimer',DISCLAIMER_VERSION);}catch(e){}
+    disc.classList.add('hidden');
+    startAfterDisclaimer();
+  });
+}
 map.on('zoomend',()=>{styleRoads();styleMarkers();sched();});
 map.on('move resize',sched);
 map.on('zoomstart',()=>cx.clearRect(0,0,cv.width,cv.height));
