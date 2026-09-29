@@ -45,6 +45,27 @@ def dist_point_to_segment(px, py, ax, ay, bx, by):
     return math.hypot(px - ax - t * dx, py - ay - t * dy)
 
 
+def closest_approach(seg_a, seg_b):
+    """Distance and midpoint between two 2-point segments (a1,a2) and (b1,b2),
+    each a ((x,y),(x,y)) pair in the same units as the returned point."""
+    a1, a2 = seg_a
+    b1, b2 = seg_b
+    dax, day = a2[0] - a1[0], a2[1] - a1[1]
+    dbx, dby = b2[0] - b1[0], b2[1] - b1[1]
+    den = dax * dby - day * dbx
+    if abs(den) > 1e-9:
+        t = ((b1[0] - a1[0]) * dby - (b1[1] - a1[1]) * dbx) / den
+        u = ((b1[0] - a1[0]) * day - (b1[1] - a1[1]) * dax) / den
+        if 0 <= t <= 1 and 0 <= u <= 1:
+            return 0.0, (a1[0] + t * dax, a1[1] + t * day)
+    d1 = dist_point_to_segment(a1[0], a1[1], b1[0], b1[1], b2[0], b2[1])
+    d2 = dist_point_to_segment(a2[0], a2[1], b1[0], b1[1], b2[0], b2[1])
+    d3 = dist_point_to_segment(b1[0], b1[1], a1[0], a1[1], a2[0], a2[1])
+    d4 = dist_point_to_segment(b2[0], b2[1], a1[0], a1[1], a2[0], a2[1])
+    best = min((d1, a1), (d2, a2), (d3, b1), (d4, b2), key=lambda z: z[0])
+    return best
+
+
 def build_roads_and_streets(H):
     shapes, recs = pickle.load(open(CACHE / 'roads.pkl', 'rb'))
 
@@ -77,19 +98,31 @@ def build_roads_and_streets(H):
     ky = 110574
     segs = [(nm, flat) for nm, cls, flat in R if nm >= 0 and cls in STREET_CLASSES]
     for h in H:
-        best = {}
+        best = {}  # name -> (dist, closest-segment-a, closest-segment-b), all in projected units
+        hx, hy = h['x'] * kx, h['y'] * ky
         for nm, f in segs:
             # cheap pre-filter: skip streets nowhere near this hydrant's longitude
             if abs(f[0] - h['x']) > .01 and abs(f[-2] - h['x']) > .01 and \
                not any(abs(f[i] - h['x']) < .003 for i in range(0, len(f), 2)):
                 continue
             for i in range(0, len(f) - 2, 2):
-                d = dist_point_to_segment(h['x'] * kx, h['y'] * ky,
-                                           f[i] * kx, f[i + 1] * ky, f[i + 2] * kx, f[i + 3] * ky)
-                if d < best.get(nm, 1e9):
-                    best[nm] = d
-        top = sorted(best.items(), key=lambda a: a[1])[:3]
-        h['s'] = [[names[k], round(d)] for k, d in top]
+                ax, ay, bx, by = f[i] * kx, f[i + 1] * ky, f[i + 2] * kx, f[i + 3] * ky
+                d = dist_point_to_segment(hx, hy, ax, ay, bx, by)
+                if d < best.get(nm, (1e9,))[0]:
+                    best[nm] = (d, (ax, ay), (bx, by))
+        top = sorted(best.items(), key=lambda a: a[1][0])[:3]
+        h['s'] = [[names[k], round(v[0])] for k, v in top]
+
+        # Which corner of the intersection the hydrant sits on (NE/NW/SE/SW),
+        # only when the two nearest streets are both close enough that this
+        # is genuinely one corner, not just two separately-nearby streets.
+        h['corner'] = ''
+        if len(top) >= 2:
+            (_, (dA, segA1, segA2)), (_, (dB, segB1, segB2)) = top[0], top[1]
+            if dA <= 70 and dB <= 70:
+                _, (ix, iy) = closest_approach((segA1, segA2), (segB1, segB2))
+                if math.hypot(ix - hx, iy - hy) <= 70:
+                    h['corner'] = (('N' if hy >= iy else 'S') + ('E' if hx >= ix else 'W'))
 
     return R, names
 

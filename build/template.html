@@ -122,6 +122,9 @@ details ul{margin:6px 0 0;padding-left:16px}
 .leaflet-tooltip.hl::before{display:none}
 .showlabels .leaflet-tooltip.hl{display:block}
 .pop h3{margin:0 0 4px;font-size:15px}
+.pop .corner{font-weight:600;font-size:12px;color:var(--muted);margin-left:5px}
+.pop .status{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px}
+.pop .status .dot{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid rgba(0,0,0,.35)}
 .pop .row{color:var(--muted);font-size:12px}
 .pop a{color:var(--accent)}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--ink)}
@@ -264,12 +267,14 @@ const groups={};Object.keys(CAT).forEach(k=>groups[k]=L.layerGroup().addTo(map))
 const counts={};
 const markers=[];
 function popupHtml(h){
-  const kind=h.t?'Storage tank / supply':'Hydrant';
-  const near=h.s.filter((s,i)=>i===0||s[1]<=60).map(s=>esc(s[0])+' <span class="row">('+s[1]+' m)</span>').join(' &middot; ');
-  const ll=h.y.toFixed(6)+', '+h.x.toFixed(6);
-  return '<div class="pop"><h3>'+esc(h.n)+'</h3><div class="row">'+kind+' &middot; Status: '+CAT[h.c].label+'</div>'
-   +(near?'<div style="margin-top:6px">Near: '+near+'</div>':'')
-   +'<div class="row" style="margin-top:6px">'+ll+' &middot; <a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+h.y+','+h.x+'">Google Maps</a></div></div>';
+  // Lead with what's actually useful in the field: where it is and its
+  // status. The internal ID and raw coordinates aren't shown -- neither
+  // means anything without already having this map open.
+  const addr=h.s.length?esc(h.s[0][0])+(h.s[1]&&h.s[1][1]<=70?' &amp; '+esc(h.s[1][0]):''):'Location unknown';
+  const corner=h.corner?'<span class="corner">('+h.corner+' corner)</span>':'';
+  return '<div class="pop"><h3>'+addr+' '+corner+'</h3>'
+   +'<div class="status"><span class="dot" style="background:'+CAT[h.c].fill+'"></span>'+esc(CAT[h.c].label)+'</div>'
+   +'<div class="row" style="margin-top:8px"><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+h.y+','+h.x+'">Directions</a></div></div>';
 }
 H.forEach(h=>{
   const key=h.c;counts[key]=(counts[key]||0)+1;
