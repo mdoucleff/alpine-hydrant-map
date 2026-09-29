@@ -1076,12 +1076,18 @@ function clearMarks(){routeLayer.clearLayers();hiLayer.clearLayers();if(pin){map
 function idle(){
   show('<h2>Closest hydrants</h2><p>Tap any spot on the map, or use your location, to see the three closest working hydrants or supply tanks and the street route to each.</p>');
 }
-function fitPadded(bb,maxZ){
+function fitPadded(bb,maxZ,gpsLL){
   const wide=window.innerWidth>760;
-  // flyToBounds (not fitBounds) so this actually tweens even on a big
-  // jump -- e.g. the very first "zero in on GPS" on load, which fitBounds
+  const opts={paddingTopLeft:wide?[300,30]:[20,90],paddingBottomRight:wide?[390,30]:[20,sheet.offsetHeight+30],maxZoom:maxZ};
+  // Zoom so `bb` (the GPS point + nearest-hydrant routes) just fits the
+  // visible area, but centre on the GPS dot itself rather than bb's own
+  // centre -- an asymmetric spread of hydrants (say, all north of you)
+  // would otherwise push the dot off to one side instead of staying put.
+  // flyTo (not fitBounds/setView) so this actually tweens even on a big
+  // jump -- e.g. the very first "zero in on GPS" on load, which those
   // would otherwise just snap to instantly with no visible animation.
-  map.flyToBounds(bb,{paddingTopLeft:wide?[300,30]:[20,90],paddingBottomRight:wide?[390,30]:[20,sheet.offsetHeight+30],maxZoom:maxZ});
+  const zoom=map._getBoundsCenterZoom(bb,opts).zoom;
+  map.flyTo(gpsLL||bb.getCenter(),zoom);
 }
 function selectHydrant(h){
   pauseFollowing();
@@ -1127,7 +1133,7 @@ function findNear(lat,lon,fromMe,acc,center){
   panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
   $('done').onclick=()=>{clearMarks();idle();pauseFollowing();};
   const bb=L.latLngBounds([[lat,lon]]);top.forEach(c=>{bb.extend([c.h.y,c.h.x]);(c.pts||[]).forEach(p=>bb.extend(p));});
-  if(center==='fit')fitPadded(bb,19);           // first fix, or resuming after a pan: frame the routes
+  if(center==='fit')fitPadded(bb,19,[lat,lon]); // first fix, or resuming after a pan: fit the routes, centred on the dot
   else if(center==='pan')map.panTo([lat,lon]);   // later ticks while following: just recentre, keep zoom
 }
 let watchId=null,following=false,needsFit=false,lastFix=null;
