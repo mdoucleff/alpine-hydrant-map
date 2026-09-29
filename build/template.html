@@ -108,6 +108,9 @@ details ul{margin:6px 0 0;padding-left:16px}
 @keyframes gpsPulse{0%{transform:scale(1);opacity:.55}70%{transform:scale(3.4);opacity:0}100%{transform:scale(3.4);opacity:0}}
 @media (prefers-reduced-motion:reduce){.me::before{animation:none;display:none}}
 .pin{width:20px;height:20px;border-radius:50%;background:#fff;border:5px solid #1a73e8;box-shadow:0 1px 5px rgba(0,0,0,.5)}
+.ants-line{stroke-dasharray:14 18;animation:antsFlow 1s linear infinite}
+@keyframes antsFlow{to{stroke-dashoffset:-32}}
+@media (prefers-reduced-motion:reduce){.ants-line{animation:none}}
 #info h1{cursor:default}
 @media (max-width:760px){
   #sheet{top:auto;left:0;right:0;bottom:0;width:auto;max-height:46vh;border-radius:14px 14px 0 0}
@@ -452,6 +455,13 @@ CAND.forEach(h=>{h.ft=toFt(h.y,h.x);h.sn=snap(h.ft[0],h.ft[1]);});
 /* ---------- nearest-hydrant UI ---------- */
 map.createPane('routes').style.zIndex=450;
 const routeRend=L.canvas({pane:'routes',padding:.4});
+// The animated primary route uses a real SVG path (not the canvas
+// renderer above) so its dash animation is plain CSS on an actual DOM
+// element -- the browser's compositor keeps it running on its own,
+// with no dependency on when/whether Leaflet next redraws that canvas
+// (which, unlike the routes drawn via camera-moving flyTo/panTo, never
+// happens again after a tap that doesn't move the map at all).
+const antsRend=L.svg({pane:'routes'});
 const routeLayer=L.layerGroup().addTo(map),hiLayer=L.layerGroup().addTo(map);
 const panel=$('panel'),sheet=$('sheet');
 const BLUE='#1a73e8';
@@ -461,23 +471,7 @@ const nearTxt=h=>h.s.filter((s,i)=>s[1]<=(i===0?70:60)).slice(0,2).map(s=>s[0]).
 function setSheetH(){document.documentElement.style.setProperty('--sheet-h',(window.innerWidth>760?0:sheet.offsetHeight)+'px');}
 function show(html){panel.innerHTML=html;sheet.scrollTop=0;requestAnimationFrame(setSheetH);}
 let pin=null,me=null;
-// "Marching ants" on the primary route: animate its dash offset so it
-// reads as flowing toward the hydrant, rather than just a static line.
-let antsLine=null,antsId=null,antsOffset=0;
-const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-function stopAnts(){if(antsId){cancelAnimationFrame(antsId);antsId=null;}antsLine=null;}
-function startAnts(line){
-  if(reduceMotion)return; // leave it as a plain static line
-  antsLine=line;
-  const step=()=>{
-    if(!antsLine)return;
-    antsOffset=(antsOffset-0.5)%32;
-    antsLine.setStyle({dashOffset:String(antsOffset)});
-    antsId=requestAnimationFrame(step);
-  };
-  antsId=requestAnimationFrame(step);
-}
-function clearMarks(){routeLayer.clearLayers();hiLayer.clearLayers();stopAnts();if(pin){map.removeLayer(pin);pin=null;}}
+function clearMarks(){routeLayer.clearLayers();hiLayer.clearLayers();if(pin){map.removeLayer(pin);pin=null;}}
 function idle(){
   show('<h2>Closest hydrants</h2><p>Tap any spot on the map, or use your location, to see the three closest working hydrants or supply tanks and the street route to each.</p>');
 }
@@ -527,9 +521,13 @@ function findNear(lat,lon,fromMe,acc,center){
     if(!isFinite(c.road))return;
     const first=c===top[0],pts=pathTo(s,rt,c.via,c.h,[lat,lon]);
     if(first)routeLayer.addLayer(L.polyline(pts,{renderer:routeRend,color:'#fff',weight:10,opacity:.9,interactive:false,lineCap:'round',lineJoin:'round'}));
-    const routeLine=L.polyline(pts,{renderer:routeRend,color:BLUE,weight:first?6:3.5,opacity:first?.95:.75,dashArray:first?'14 18':'7 7',interactive:false,lineCap:'round',lineJoin:'round'});
+    // The chosen route is a real SVG path with a CSS class driving its
+    // flowing-dash animation (see .ants-line); the two alternates stay
+    // canvas-rendered static dashed lines like everything else on the map.
+    const routeLine=first
+      ?L.polyline(pts,{renderer:antsRend,className:'ants-line',color:BLUE,weight:6,opacity:.95,interactive:false,lineCap:'round',lineJoin:'round'})
+      :L.polyline(pts,{renderer:routeRend,color:BLUE,weight:3.5,opacity:.75,dashArray:'7 7',interactive:false,lineCap:'round',lineJoin:'round'});
     routeLayer.addLayer(routeLine);
-    if(first)startAnts(routeLine); // flowing dashes on the chosen route only, not the two alternates
     c.pts=pts;
     c.rail=routeCrossesRail(pts);
   });
