@@ -549,7 +549,32 @@ const mq=window.matchMedia('(prefers-color-scheme: dark)');
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   window.addEventListener('load', () => {
     // tell the worker which exact URL to precache — see the comment in sw.js
-    navigator.serviceWorker.register('./sw.js?page=' + encodeURIComponent(location.pathname + location.search)).catch(() => {});
+    navigator.serviceWorker.register('./sw.js?page=' + encodeURIComponent(location.pathname + location.search))
+      .then((reg) => {
+        // Re-check for a newer sw.js right away, and again every time the
+        // installed app is brought back to the foreground -- otherwise an
+        // update can sit unnoticed until whatever the browser's own lazy
+        // check interval happens to be (on Android, opening an already-
+        // running PWA from the home screen often just resumes it rather
+        // than making a fresh request, so without this an update could go
+        // unnoticed indefinitely, not just for "one restart").
+        reg.update().catch(() => {});
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        });
+      })
+      .catch(() => {});
+    // A new service worker has just taken over (skipWaiting + clients.claim
+    // in sw.js make that happen as soon as it's installed). This page's
+    // own DOM was still built from whatever the old one served though, so
+    // reload once to actually pick up the new content -- this is the "two
+    // restarts" step this replaces.
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading) return;
+      reloading = true;
+      location.reload();
+    });
   });
 }
 </script>

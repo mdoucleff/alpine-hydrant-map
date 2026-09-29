@@ -45,7 +45,13 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   e.respondWith(
-    fetch(e.request).then((res) => {
+    // {cache:'no-store'} bypasses the browser's own HTTP cache, not just
+    // ours. Without it, "network-first" can still be quietly satisfied by
+    // a same-device HTTP cache honoring the host's Cache-Control header
+    // (GitHub Pages/Fastly send a several-minute max-age), so a page that
+    // was reopened soon after a new deploy could still see old content
+    // even though this code did ask the network first.
+    fetch(e.request, { cache: 'no-store' }).then((res) => {
       // Only cache good, basic (same-origin, non-opaque) responses.
       if (res && res.ok && res.type === 'basic') {
         const copy = res.clone();
