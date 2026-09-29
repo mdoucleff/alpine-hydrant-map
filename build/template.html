@@ -306,7 +306,7 @@ const CAT={
   black: {label:'Not Working',         fill:'#000000'},
   yellow:{label:'Low Pressure',        fill:'#ffff00'},
   purple:{label:'Storage Supply Tank', fill:'#a900e6'},
-  orange:{label:'Unknown',             fill:'#ff8c00'}
+  brown: {label:'Unknown',             fill:'#8b5a2b'}
 };
 const groups={};Object.keys(CAT).forEach(k=>groups[k]=L.layerGroup().addTo(map));
 const counts={};
@@ -410,7 +410,7 @@ const maxId=Math.max(...ids),gaps=[];for(let i=1;i<=maxId;i++)if(!ids.has(i))gap
 const notes=$('notes');
 [dup.length?'Duplicate name: '+dup.join('; ')+' (both are plotted)':'',
  gaps.length?'No point in the KMZ for: H'+gaps.join(', H'):'',
- 'Status is taken from the KMZ symbol color: red = Good, black = Not Working, yellow = Low Pressure, purple = Storage Supply Tank, orange = Unknown.',
+ 'Status is taken from the KMZ symbol color: red = Good, black = Not Working, yellow = Low Pressure, purple = Storage Supply Tank, brown = Unknown.',
  'Closest-hydrant search skips hydrants marked Not Working; Storage Supply Tanks are included.',
  'Street distances follow the TIGER street network; they are estimates, not driving or hose-lay measurements.',
  'Positions are as drawn in the KMZ. This is a reference map, not a survey.'
