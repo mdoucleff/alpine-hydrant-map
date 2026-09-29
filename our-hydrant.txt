@@ -1,0 +1,3 @@
+flow: good
+30.364299, -103.655579
+corner: NorthWest
