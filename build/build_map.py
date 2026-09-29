@@ -60,6 +60,14 @@ def dist_point_to_segment(px, py, ax, ay, bx, by):
     return math.hypot(px - ax - t * dx, py - ay - t * dy)
 
 
+def point_on_segment(px, py, ax, ay, bx, by):
+    """The actual closest point ON the segment (not just the distance to it)."""
+    dx, dy = bx - ax, by - ay
+    L = dx * dx + dy * dy
+    t = 0 if L == 0 else max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / L))
+    return (ax + t * dx, ay + t * dy)
+
+
 def closest_approach(seg_a, seg_b):
     """Distance and midpoint between two 2-point segments (a1,a2) and (b1,b2),
     each a ((x,y),(x,y)) pair in the same units as the returned point."""
@@ -189,6 +197,16 @@ def build_roads_and_streets(H):
                         h['corner'] = side_of(dirB, ns, ew)
                     else:  # both through (a real 4-way) or neither (rare) -- full corner either way
                         h['corner'] = ns + ew
+
+        # Not near any intersection (mid-block, or the only nearby street
+        # has nothing else close enough to cross it): still worth saying
+        # which side of that one street the hydrant is on.
+        if not h['corner'] and top:
+            _, (dA, segA1, segA2) = top[0]
+            px, py = point_on_segment(hx, hy, segA1[0], segA1[1], segA2[0], segA2[1])
+            ns = 'N' if hy >= py else 'S'
+            ew = 'E' if hx >= px else 'W'
+            h['corner'] = side_of(unit(segA1, segA2), ns, ew)
 
     return R, names
 
