@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
 <title>Alpine TX Hydrant Map</title>
 <script>
 // PWA installation (manifest + service worker) is temporarily suspended --
@@ -975,7 +976,9 @@ const CAT={
 const groups={};Object.keys(CAT).forEach(k=>groups[k]=L.layerGroup().addTo(map));
 const counts={};
 const markers=[];
-const REPORT_EMAIL='matt.doucleff@gmail.com';
+// Built from character codes, not a literal string, so simple scrapers
+// reading the page's raw HTML/JS source can't harvest this address.
+const REPORT_EMAIL=String.fromCharCode(109,97,116,116,46,100,111,117,99,108,101,102,102,64,103,109,97,105,108,46,99,111,109);
 // A plain mailto link, pre-filled so reporting something takes one tap plus
 // a sentence -- no account, no form, no network needed until they actually
 // hit send (and even then their own mail app queues it if they're offline).
