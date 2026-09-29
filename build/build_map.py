@@ -62,7 +62,7 @@ STATUS_TO_COLOR = {
     'not working': 'black',
     'low pressure': 'yellow',
     'storage supply tank': 'purple',
-    'unknown': 'gray',
+    'unknown': 'orange',
 }
 
 
