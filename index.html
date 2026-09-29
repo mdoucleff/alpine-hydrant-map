@@ -978,6 +978,14 @@ const CAT={
 const groups={};Object.keys(CAT).forEach(k=>groups[k]=L.layerGroup().addTo(map));
 const counts={};
 const markers=[];
+const REPORT_EMAIL='matt.doucleff@gmail.com';
+// A plain mailto link, pre-filled so reporting something takes one tap plus
+// a sentence -- no account, no form, no network needed until they actually
+// hit send (and even then their own mail app queues it if they're offline).
+function reportLink(subject,body,text,cls){
+  const href='mailto:'+REPORT_EMAIL+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  return '<a'+(cls?' class="'+cls+'"':'')+' href="'+href+'">'+esc(text)+'</a>';
+}
 function popupHtml(h){
   // Lead with what's actually useful in the field: where it is and its
   // status. The internal ID and raw coordinates aren't shown -- neither
@@ -993,9 +1001,14 @@ function popupHtml(h){
   // a 2-letter diagonal at a real 4-way (NE/NW/SE/SW), or a single letter
   // at a T where only one street continues through (N/S/E/W side of it).
   const badge=h.corner?'<div class="cornerbadge">'+h.corner+(h.corner.length===2?' CORNER':' SIDE')+'</div>':'';
+  const reportBody='Hydrant: '+h.n+'\nLocation: '+h.y.toFixed(6)+', '+h.x.toFixed(6)
+   +(h.s.length?'\nNearest streets: '+h.s.slice(0,2).map(s=>s[0]).join(', '):'')
+   +'\nCurrent status shown on map: '+CAT[h.c].label
+   +'\n\nWhat\'s wrong? (describe below)\n';
   return '<div class="pop">'+badge+(addr?'<h3>'+addr+'</h3>':'')
    +'<div class="status"><span class="dot" style="background:'+CAT[h.c].fill+'"></span>'+esc(CAT[h.c].label)+'</div>'
-   +'<div class="row" style="margin-top:8px"><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+h.y+','+h.x+'">Directions</a></div></div>';
+   +'<div class="row" style="margin-top:8px"><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+h.y+','+h.x+'">Directions</a>'
+   +' &middot; '+reportLink('Hydrant report: '+h.n,reportBody,'Report a problem')+'</div></div>';
 }
 // A simple front-view hydrant silhouette, one flat colour (status) with
 // a themed outline -- reads clearly even small, unlike a more detailed
@@ -1234,10 +1247,15 @@ function findNear(lat,lon,fromMe,acc,center){
      +'<span class="s">'+(near?'near '+esc(near)+' &middot; ':'')+fmtFt(c.st)+' '+dir+' straight line</span>'
      +(c.rail?'<span class="s rail">&#9888; crosses railroad tracks</span>':'')+'</button></li>';
   }).join('');
+  const missingBody='Location: '+lat.toFixed(6)+', '+lon.toFixed(6)
+    +'\nNearest hydrant already on the map: '+(isFinite(top[0].road)?top[0].h.n+', '+fmtFt(top[0].road)+' by street':top[0].h.n)
+    +'\n\nWhat did you find? (describe below -- status, whether it\'s missing entirely, wrong position, etc.)\n';
   show('<h2>Closest hydrants</h2><p>'+(fromMe?'From your location'+(acc?' (&plusmn;'+fmtFt(acc*FT)+')':''):'From the blue pin')
     +'. Distances follow the streets. Hydrants marked Not Working are skipped.</p>'
     +(s.d>250?'<div class="warn">This spot is about '+fmtFt(s.d)+' from the nearest mapped street; that distance is included.</div>':'')
-    +'<ul>'+items+'</ul><div class="actions"><button class="btn" id="done">Clear</button></div>');
+    +'<ul>'+items+'</ul><div class="actions"><button class="btn" id="done">Clear</button>'
+    +reportLink('Hydrant not on the map, near '+lat.toFixed(4)+','+lon.toFixed(4),missingBody,'Report a hydrant not shown here','btn')
+    +'</div>');
   panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
   $('done').onclick=()=>{clearMarks();idle();pauseFollowing();};
   const bb=L.latLngBounds([[lat,lon]]);top.forEach(c=>{bb.extend([c.h.y,c.h.x]);(c.pts||[]).forEach(p=>bb.extend(p));});
