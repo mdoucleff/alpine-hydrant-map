@@ -185,16 +185,17 @@ def build_roads_and_streets(H):
             (nameA, (dA, segA1, segA2)), (nameB, (dB, segB1, segB2)) = top[0], top[1]
             if dA <= 70 and dB <= 70:
                 gap, (ix, iy) = closest_approach((segA1, segA2), (segB1, segB2))
-                # `gap` is how far apart the two streets' closest points to
-                # each other actually are -- not to be confused with how far
-                # that point is from the hydrant. TIGER roads are noded at
-                # real intersections (segments share a vertex, gap ~= 0), so
-                # a real corner/T should have a tiny gap; a larger one means
-                # these are just two streets running near each other without
-                # truly meeting nearby, which the hydrant-distance check
-                # alone doesn't catch (it only knows the point is close to
-                # the hydrant, not that the point is a real junction).
-                if gap <= 20 and math.hypot(ix - hx, iy - hy) <= 70:
+                # `gap` alone isn't enough: streets that run concurrent for
+                # a stretch (Alpine's US 67/90/118 are the same physical
+                # road under multiple route numbers for long stretches)
+                # have a near-zero gap almost everywhere along that whole
+                # stretch, not just where the hydrant actually is -- so a
+                # "shared" point can still land nowhere near this hydrant.
+                # A real corner/T has the hydrant right there, within a
+                # handful of metres of the actual curb corner, not half a
+                # block away, so that distance is the tighter of the two
+                # checks and does the real work here.
+                if gap <= 20 and math.hypot(ix - hx, iy - hy) <= 25:
                     ns = 'N' if hy >= iy else 'S'
                     ew = 'E' if hx >= ix else 'W'
                     dirA, dirB = unit(segA1, segA2), unit(segB1, segB2)
