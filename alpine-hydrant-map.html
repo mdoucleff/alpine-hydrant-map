@@ -849,6 +849,15 @@ map.createPane('roads').style.zIndex=300;
 map.createPane('hydrants').style.zIndex=500;
 const roadRend=L.canvas({pane:'roads',padding:.4});
 const hydRend=L.canvas({pane:'hydrants',padding:.4});
+// Canvas renderers scale their whole canvas via a CSS transform during a
+// zoom animation, then redraw at the correct size only once it settles --
+// fine for roads (they're supposed to look continuous while zooming), but
+// it makes fixed-radius hydrant dots visibly balloon then snap back down
+// on every zoom, especially now that "My location"/"Fit Alpine" animate.
+// Marking this renderer non-zoom-animated keeps the dots at a constant
+// on-screen size throughout instead: they just hold still and redraw in
+// place once the zoom stops, rather than stretching.
+hydRend._zoomAnimated=false;
 const casings=[],fills=[];
 R.forEach(r=>{
   const ll=[];for(let i=0;i<r[2].length;i+=2)ll.push([r[2][i+1],r[2][i]]);
