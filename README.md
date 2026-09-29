@@ -48,6 +48,8 @@ Built for the Alpine Fire Department.
 | `hydrant-icon.png` | Home-screen / install icon. |
 | `Alpine Hydrants_9_23_26_Update.kmz` | Source of hydrant/tank locations and status. |
 | `tl_2024_48043_roads.zip` | U.S. Census Bureau TIGER/Line 2024 road centerlines for Brewster County &mdash; the map's street basemap and its routing graph. |
+| `alpine-rail.geojson` | Alpine-area railroad tracks, clipped from TIGER/Line's national rail layer. |
+| `hydrant-corrections.csv` | Hand-maintained fixes for known-wrong or missing KMZ entries (see below). Empty (header only) until something actually needs correcting. |
 | `build/` | The build pipeline that turns the KMZ + roads zip into `index.html` (see “Updating the map” below). |
 
 Reference only &mdash; not surveyed. Hydrant status and locations should be
@@ -76,6 +78,27 @@ automatically within about a minute of the push.
 
 **Changing the hydrant data:** replace the KMZ with an updated export and
 regenerate.
+
+**Fixing a specific wrong or missing hydrant, without waiting on a new KMZ
+export:** add a row to `hydrant-corrections.csv` and regenerate. It's read
+and applied automatically by `build_map.py` (silently doing nothing if the
+file is empty or missing) right after the KMZ loads, so anything added
+through it gets the same nearest-street/corner-label treatment as a real
+KMZ hydrant. Columns:
+
+| Column | Used by | Meaning |
+|---|---|---|
+| `action` | both | `add` or `remove` |
+| `name` | both | The hydrant's name/ID. For `remove`, must match a KMZ entry's name exactly. |
+| `status` | `add` | `Good`, `Not Working`, `Low Pressure`, or `Storage Supply Tank` |
+| `lat`, `lon` | `add`; optional for `remove` | Required for `add`. For `remove`, only needed if two KMZ hydrants share the same name (it happens &mdash; H151 does) &mdash; give the coordinates of the one to remove and it'll pick the closer match; without it, an ambiguous name is skipped (nothing removed) rather than guessed at. |
+| `tank` | `add` | `yes`/`no`; if left blank, inferred from status (`Storage Supply Tank` &rarr; yes). |
+| `note` | both | Free text for whoever's maintaining the file; not shown on the map. |
+
+Removing an entry and adding a corrected replacement is two rows. The build
+log prints exactly what it did (`N added, M removed`) and warns instead of
+guessing about anything it can't apply cleanly &mdash; an unrecognized
+status, a name it can't find, missing coordinates, or an ambiguous removal.
 
 **Changing the streets:** TIGER/Line road files are published annually by
 the Census Bureau; download the current year's `tl_<year>_48043_roads.zip`

@@ -7,11 +7,12 @@
 
 Run from anywhere; paths below are all relative to this script.
 """
-import json, pickle, math, re, pathlib
+import csv, json, pickle, math, re, pathlib
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 CACHE = HERE / 'cache'
+CORRECTIONS_CSV = ROOT / 'hydrant-corrections.csv'
 
 
 def load_rail():
@@ -50,6 +51,87 @@ def load_hydrants():
         is_tank = bool(re.search(r'tank|storage', name, re.I)) and name != 'Storage Tank Hydrant'
         H.append(dict(n=name, c=COLOR_BY_STYLE[p['style']], t=1 if is_tank else 0,
                       y=round(p['lat'], 6), x=round(p['lon'], 6)))
+    return H
+
+
+# Status names as written in the popup/legend (build/template.html's CAT
+# object) -> the internal single-letter-ish color code. Keep in sync with
+# that object if the labels there ever change.
+STATUS_TO_COLOR = {
+    'good': 'red',
+    'not working': 'black',
+    'low pressure': 'yellow',
+    'storage supply tank': 'purple',
+}
+
+
+def load_corrections():
+    """Read hydrant-corrections.csv (add/remove rows for fixing entries the
+    KMZ has wrong, or adding ones it's missing entirely). Returns [] if the
+    file doesn't exist -- it's optional, not everyone will need it."""
+    if not CORRECTIONS_CSV.exists():
+        return []
+    rows = []
+    with open(CORRECTIONS_CSV, newline='', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            action = (row.get('action') or '').strip().lower()
+            if action:
+                rows.append(row)
+    return rows
+
+
+def apply_corrections(H, rows):
+    """Apply hydrant-corrections.csv rows to H in place-ish (returns a new
+    list). 'remove' rows drop a matching KMZ entry by name (optionally
+    disambiguated by lat/lon, for the rare case of two KMZ points sharing a
+    name -- H151 duplicates itself, for one); 'add' rows append a brand new
+    hydrant in the same shape load_hydrants() produces, so it gets full
+    nearest-street/corner treatment downstream exactly like a KMZ one."""
+    removed = added = 0
+    for row in rows:
+        action = row['action'].strip().lower()
+        name = (row.get('name') or '').strip()
+
+        if action == 'remove':
+            matches = [i for i, h in enumerate(H) if h['n'] == name]
+            if not matches:
+                print(f'  correction: "remove {name}" -- no KMZ hydrant with that name, skipped')
+                continue
+            if len(matches) > 1:
+                lat, lon = (row.get('lat') or '').strip(), (row.get('lon') or '').strip()
+                if lat and lon:
+                    lat, lon = float(lat), float(lon)
+                    matches = [min(matches, key=lambda i: math.hypot(H[i]['x'] - lon, H[i]['y'] - lat))]
+                else:
+                    print(f'  correction: "remove {name}" is ambiguous ({len(matches)} KMZ hydrants share '
+                          f'that name) and no lat/lon was given to tell them apart -- skipped, none removed')
+                    continue
+            del H[matches[0]]
+            removed += 1
+
+        elif action == 'add':
+            status = (row.get('status') or '').strip().lower()
+            color = STATUS_TO_COLOR.get(status)
+            if not color:
+                print(f'  correction: "add {name}" has unrecognized status "{row.get("status")}" '
+                      f'(expected one of: {", ".join(v.title() for v in STATUS_TO_COLOR)}) -- skipped')
+                continue
+            try:
+                lat, lon = float(row['lat']), float(row['lon'])
+            except (KeyError, ValueError):
+                print(f'  correction: "add {name}" has no valid lat/lon -- skipped')
+                continue
+            tank_field = (row.get('tank') or '').strip().lower()
+            is_tank = tank_field in ('yes', 'y', 'true', '1') if tank_field else (color == 'purple')
+            H.append(dict(n=name or f'Added-{len(H)+1}', c=color, t=1 if is_tank else 0,
+                          y=round(lat, 6), x=round(lon, 6)))
+            added += 1
+
+        else:
+            print(f'  correction: unrecognized action "{row["action"]}" for "{name}" -- skipped')
+
+    if removed or added:
+        print(f'corrections applied: {added} added, {removed} removed (from {CORRECTIONS_CSV.name})')
     return H
 
 
@@ -229,6 +311,7 @@ def build_roads_and_streets(H):
 
 def main():
     H = load_hydrants()
+    H = apply_corrections(H, load_corrections())
     R, names = build_roads_and_streets(H)
     RAIL = load_rail()
     print('rail parts', len(RAIL))
