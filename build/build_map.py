@@ -97,6 +97,41 @@ def build_roads_and_streets(H):
     kx = 111320 * math.cos(math.radians(REF_LAT))
     ky = 110574
     segs = [(nm, flat) for nm, cls, flat in R if nm >= 0 and cls in STREET_CLASSES]
+
+    # All points per street name, for deciding whether a street continues
+    # through a junction or dead-ends into it (a T), used below.
+    by_name_pts = {}
+    for nm, f in segs:
+        pts = by_name_pts.setdefault(nm, [])
+        for i in range(0, len(f), 2):
+            pts.append((f[i] * kx, f[i + 1] * ky))
+
+    THROUGH_M = 25  # metres a street must extend past the junction, on BOTH sides, to count as "through" rather than a dead-end there
+
+    def continues_through(nm, junction, direction):
+        jx, jy = junction
+        dx, dy = direction
+        max_pos = max_neg = 0.0
+        for px, py in by_name_pts.get(nm, ()):
+            t = (px - jx) * dx + (py - jy) * dy
+            if t > max_pos:
+                max_pos = t
+            elif t < max_neg:
+                max_neg = t
+        return max_pos >= THROUGH_M and -max_neg >= THROUGH_M
+
+    def unit(a, b):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        L = math.hypot(dx, dy) or 1
+        return (dx / L, dy / L)
+
+    def side_of(direction, ns, ew):
+        # `direction` is the THROUGH street's own bearing. The meaningful
+        # single side-descriptor is the axis that street does NOT run
+        # along: an east-west street is described by which side (N/S)
+        # you're on, a north-south one by E/W.
+        return ns if abs(direction[0]) > abs(direction[1]) else ew
+
     for h in H:
         best = {}  # name -> (dist, closest-segment-a, closest-segment-b), all in projected units
         hx, hy = h['x'] * kx, h['y'] * ky
@@ -113,16 +148,32 @@ def build_roads_and_streets(H):
         top = sorted(best.items(), key=lambda a: a[1][0])[:3]
         h['s'] = [[names[k], round(v[0])] for k, v in top]
 
-        # Which corner of the intersection the hydrant sits on (NE/NW/SE/SW),
-        # only when the two nearest streets are both close enough that this
-        # is genuinely one corner, not just two separately-nearby streets.
+        # Which corner of the intersection the hydrant sits on, only when
+        # the two nearest streets are both close enough that this is
+        # genuinely one intersection, not just two separately-nearby
+        # streets (a hydrant mid-block gets no direction hint at all).
+        # A real 4-way gets a corner (NE/NW/SE/SW); a T -- one street
+        # dead-ends into the other right there -- gets a single side
+        # (N/S/E/W) relative to whichever street actually continues
+        # through, which is the only distinction that means anything at
+        # a T (there's no far corner on the dead-end side to be "at").
         h['corner'] = ''
         if len(top) >= 2:
-            (_, (dA, segA1, segA2)), (_, (dB, segB1, segB2)) = top[0], top[1]
+            (nameA, (dA, segA1, segA2)), (nameB, (dB, segB1, segB2)) = top[0], top[1]
             if dA <= 70 and dB <= 70:
                 _, (ix, iy) = closest_approach((segA1, segA2), (segB1, segB2))
                 if math.hypot(ix - hx, iy - hy) <= 70:
-                    h['corner'] = (('N' if hy >= iy else 'S') + ('E' if hx >= ix else 'W'))
+                    ns = 'N' if hy >= iy else 'S'
+                    ew = 'E' if hx >= ix else 'W'
+                    dirA, dirB = unit(segA1, segA2), unit(segB1, segB2)
+                    throughA = continues_through(nameA, (ix, iy), dirA)
+                    throughB = continues_through(nameB, (ix, iy), dirB)
+                    if throughA and not throughB:
+                        h['corner'] = side_of(dirA, ns, ew)
+                    elif throughB and not throughA:
+                        h['corner'] = side_of(dirB, ns, ew)
+                    else:  # both through (a real 4-way) or neither (rare) -- full corner either way
+                        h['corner'] = ns + ew
 
     return R, names
 

@@ -128,7 +128,7 @@ details ul{margin:6px 0 0;padding-left:16px}
 .leaflet-tooltip.hl::before{display:none}
 .showlabels .leaflet-tooltip.hl{display:block}
 .pop h3{margin:0 0 4px;font-size:15px}
-.pop .corner{font-weight:600;font-size:12px;color:var(--muted);margin-left:5px}
+.pop .cornerbadge{display:inline-block;font-weight:800;font-size:13px;letter-spacing:.03em;color:#fff;background:var(--accent);border-radius:6px;padding:3px 9px;margin-bottom:7px}
 .pop .status{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px}
 .pop .status .dot{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid rgba(0,0,0,.35)}
 .pop .row{color:var(--muted);font-size:12px}
@@ -277,8 +277,11 @@ function popupHtml(h){
   // status. The internal ID and raw coordinates aren't shown -- neither
   // means anything without already having this map open.
   const addr=h.s.length?esc(h.s[0][0])+(h.s[1]&&h.s[1][1]<=70?' &amp; '+esc(h.s[1][0]):''):'Location unknown';
-  const corner=h.corner?'<span class="corner">('+h.corner+' corner)</span>':'';
-  return '<div class="pop"><h3>'+addr+' '+corner+'</h3>'
+  // h.corner is '' (no clear intersection -- e.g. mid-block, no hint shown),
+  // a 2-letter diagonal at a real 4-way (NE/NW/SE/SW), or a single letter
+  // at a T where only one street continues through (N/S/E/W side of it).
+  const badge=h.corner?'<div class="cornerbadge">'+h.corner+(h.corner.length===2?' CORNER':' SIDE')+'</div>':'';
+  return '<div class="pop">'+badge+'<h3>'+addr+'</h3>'
    +'<div class="status"><span class="dot" style="background:'+CAT[h.c].fill+'"></span>'+esc(CAT[h.c].label)+'</div>'
    +'<div class="row" style="margin-top:8px"><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+h.y+','+h.x+'">Directions</a></div></div>';
 }
