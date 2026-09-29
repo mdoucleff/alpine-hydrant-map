@@ -623,7 +623,7 @@ $('fit').addEventListener('click',fit);
 // Everything after this point (the "Fit Alpine" button, GPS zero-in) can
 // safely use the animated `fit`/flyToBounds.
 map.fitBounds(coreBounds.pad(.06));
-map.setZoom(map.getZoom()+2); // a bit closer than the full-town fit, just for this first paint before GPS tweens in
+map.setZoom(map.getZoom()+1); // a bit closer than the full-town fit, just for this first paint before GPS tweens in
 styleRoads();styleMarkers();drawLabels();idle();
 // Data-accuracy disclaimer: must be explicitly accepted once per device
 // before GPS tracking starts. Bump DISCLAIMER_VERSION to make it reappear
