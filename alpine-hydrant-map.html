@@ -769,6 +769,8 @@ details ul{margin:6px 0 0;padding-left:16px}
 @keyframes gpsPulse{0%{transform:scale(1);opacity:.55}70%{transform:scale(3.4);opacity:0}100%{transform:scale(3.4);opacity:0}}
 @media (prefers-reduced-motion:reduce){.me::before{animation:none;display:none}}
 .pin{width:20px;height:20px;border-radius:50%;background:#fff;border:5px solid #1a73e8;box-shadow:0 1px 5px rgba(0,0,0,.5)}
+.hydicon{background:none;border:none}
+.hdot{width:100%;height:100%;border-radius:50%;box-sizing:border-box;border:2px solid var(--ring)}
 .ants-line{stroke-dasharray:14 18;animation:antsFlow 1s linear infinite}
 @keyframes antsFlow{to{stroke-dashoffset:-32}}
 @media (prefers-reduced-motion:reduce){.ants-line{animation:none}}
@@ -865,7 +867,8 @@ const DASH={S1500:'5 4',S1740:'2 4'};
 map.createPane('roads').style.zIndex=300;
 map.createPane('hydrants').style.zIndex=500;
 const roadRend=L.canvas({pane:'roads',padding:.4});
-const hydRend=L.canvas({pane:'hydrants',padding:.4});
+// Hydrant markers are real DOM icons (L.marker + divIcon), not canvas
+// circleMarkers -- see the comment above H.forEach() below for why.
 const casings=[],fills=[];
 R.forEach(r=>{
   const ll=[];for(let i=0;i<r[2].length;i+=2)ll.push([r[2][i+1],r[2][i]]);
@@ -995,19 +998,34 @@ function popupHtml(h){
    +'<div class="status"><span class="dot" style="background:'+CAT[h.c].fill+'"></span>'+esc(CAT[h.c].label)+'</div>'
    +'<div class="row" style="margin-top:8px"><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+h.y+','+h.x+'">Directions</a></div></div>';
 }
+// Hydrant dots are real DOM icons (L.marker+divIcon), not canvas
+// circleMarkers. Leaflet repositions a Marker's icon on zoom with a
+// plain translate (Marker._animateZoom -> _setPos, position only) --
+// a Path/circleMarker instead lives in a Renderer (canvas or SVG,
+// doesn't matter which -- both share the same base class) whose whole
+// container gets CSS-scaled as a placeholder during the zoom animation
+// before the real redraw, which is exactly what made fixed-radius dots
+// visibly balloon then snap back down on every zoom. A DOM icon's own
+// size is never touched by that, so it structurally can't happen here.
 H.forEach(h=>{
   const key=h.c;counts[key]=(counts[key]||0)+1;
-  const o={renderer:hydRend,radius:h.t?7:6,fillColor:CAT[key].fill,fillOpacity:1,color:css('--ring'),weight:2};
-  o.bubblingMouseEvents=false;
-  const m=L.circleMarker([h.y,h.x],o);
+  const d=(h.t?7:6)*2;
+  const icon=L.divIcon({className:'hydicon',html:'<div class="hdot" style="background:'+CAT[key].fill+'"></div>',iconSize:[d,d],iconAnchor:[d/2,d/2]});
+  const m=L.marker([h.y,h.x],{icon,pane:'hydrants',interactive:true,bubblingMouseEvents:false,keyboard:false});
   m.bindPopup(()=>popupHtml(h),{maxWidth:300,autoPan:false});
   m.bindTooltip(esc(h.n.replace(/ - PW$/,'')),{permanent:true,direction:'right',offset:[8,0],className:'hl'});
   m.on('click',pauseFollowing);
   m._h=h;h._m=m;m._key=key;groups[key].addLayer(m);markers.push(m);
 });
 function styleMarkers(){
-  const z=map.getZoom(),r=Math.max(3,Math.min(9,3+(z-13)*1.1));
-  markers.forEach(m=>{m.setStyle({color:css('--ring'),weight:z>=15?2:1.2});m.setRadius(m._h.t?r+1.5:r);});
+  const z=map.getZoom(),r=Math.max(3,Math.min(9,3+(z-13)*1.1)),bw=z>=15?2:1.2;
+  markers.forEach(m=>{
+    const d=(m._h.t?r+1.5:r)*2,el=m.getElement();
+    if(!el)return;
+    el.style.width=d+'px';el.style.height=d+'px';el.style.marginLeft=(-d/2)+'px';el.style.marginTop=(-d/2)+'px';
+    const dot=el.firstElementChild;
+    if(dot)dot.style.borderWidth=bw+'px';
+  });
 }
 
 /* ---------- legend ---------- */
