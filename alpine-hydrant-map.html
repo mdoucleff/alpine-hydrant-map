@@ -1078,7 +1078,10 @@ function idle(){
 }
 function fitPadded(bb,maxZ){
   const wide=window.innerWidth>760;
-  map.fitBounds(bb,{paddingTopLeft:wide?[300,30]:[20,90],paddingBottomRight:wide?[390,30]:[20,sheet.offsetHeight+30],maxZoom:maxZ,animate:true});
+  // flyToBounds (not fitBounds) so this actually tweens even on a big
+  // jump -- e.g. the very first "zero in on GPS" on load, which fitBounds
+  // would otherwise just snap to instantly with no visible animation.
+  map.flyToBounds(bb,{paddingTopLeft:wide?[300,30]:[20,90],paddingBottomRight:wide?[390,30]:[20,sheet.offsetHeight+30],maxZoom:maxZ});
 }
 function selectHydrant(h){
   pauseFollowing();
@@ -1212,9 +1215,13 @@ document.querySelector('#info h1').addEventListener('click',()=>{if(window.inner
 /* ---------- view ---------- */
 const core=H.filter(h=>!h.t&&h.x<-103.6);
 const coreBounds=L.latLngBounds(core.map(h=>[h.y,h.x]));
-const fit=()=>map.fitBounds(coreBounds.pad(.06));
+const fit=()=>map.flyToBounds(coreBounds.pad(.06));
 $('fit').addEventListener('click',fit);
-fit();
+// flyToBounds needs a view to animate FROM -- it throws if called before the
+// map has ever had one, which this line is establishing for the first time.
+// Everything after this point (the "Fit Alpine" button, GPS zero-in) can
+// safely use the animated `fit`/flyToBounds.
+map.fitBounds(coreBounds.pad(.06));
 styleRoads();styleMarkers();drawLabels();idle();
 // Data-accuracy disclaimer: must be explicitly accepted once per device
 // before GPS tracking starts. Bump DISCLAIMER_VERSION to make it reappear
