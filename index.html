@@ -827,7 +827,7 @@ details ul{margin:6px 0 0;padding-left:16px}
 <div id="disclaimer" role="alertdialog" aria-modal="true" aria-labelledby="disc-h">
   <div class="card">
     <h2 id="disc-h">Before you use this map</h2>
-    <p>Hydrant data has known errors. Confirm status in person before relying on it.</p>
+    <p>Hydrant data may have errors. Confirm status in person before relying on it.</p>
     <p class="install ios">For offline use: tap <b>Share</b> in Safari, then <b>Add to Home Screen</b>.</p>
     <p class="install android">For offline use: tap &#8942; (menu), then <b>Install app</b> (or <b>Add to Home screen</b>).</p>
     <button id="disc-ok" class="btn primary">I understand &mdash; continue</button>
@@ -1350,7 +1350,7 @@ styleRoads();styleMarkers();drawLabels();idle();
 // Data-accuracy disclaimer: must be explicitly accepted once per device
 // before GPS tracking starts. Bump DISCLAIMER_VERSION to make it reappear
 // for everyone if the wording ever changes materially.
-const DISCLAIMER_VERSION='3';
+const DISCLAIMER_VERSION='4';
 const disc=$('disclaimer');
 if(window.PWA_ENABLED){ // show only the install tip for the platform actually being used
   const ua=navigator.userAgent;
