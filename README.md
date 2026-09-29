@@ -90,7 +90,7 @@ KMZ hydrant. Columns:
 |---|---|---|
 | `action` | both | `add` or `remove` |
 | `name` | both | The hydrant's name/ID. For `remove`, must match a KMZ entry's name exactly. |
-| `status` | `add` | `Good`, `Not Working`, `Low Pressure`, or `Storage Supply Tank` |
+| `status` | `add` | `Good`, `Not Working`, `Low Pressure`, `Storage Supply Tank`, or `Unknown` |
 | `lat`, `lon` | `add`; optional for `remove` | Required for `add`. For `remove`, only needed if two KMZ hydrants share the same name (it happens &mdash; H151 does) &mdash; give the coordinates of the one to remove and it'll pick the closer match; without it, an ambiguous name is skipped (nothing removed) rather than guessed at. |
 | `tank` | `add` | `yes`/`no`; if left blank, inferred from status (`Storage Supply Tank` &rarr; yes). |
 | `note` | both | Free text for whoever's maintaining the file; not shown on the map. |
