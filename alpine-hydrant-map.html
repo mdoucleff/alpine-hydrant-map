@@ -854,17 +854,10 @@ const hydRend=L.canvas({pane:'hydrants',padding:.4});
 // fine for roads (they're supposed to look continuous while zooming), but
 // it makes fixed-radius hydrant dots visibly balloon then snap back down
 // on every zoom, especially now that "My location"/"Fit Alpine" animate.
-// Leaflet's Renderer binds its plain 'zoom' handler (the one that applies
-// this transform on every animation frame, incl. every frame of a flyTo)
-// UNCONDITIONALLY -- the _zoomAnimated flag only gates a separate,
-// one-shot 'zoomanim' event, so setting that flag alone (a previous
-// attempt at this) does nothing. Overriding both handlers as no-ops,
-// before this renderer's canvas is ever added to the map (so Leaflet
-// binds these no-ops instead of the real ones), stops the dots from
-// being stretched: they hold still and redraw correctly once the zoom
-// settles (that redraw is on 'moveend', untouched by this).
-hydRend._onZoom=function(){};
-hydRend._onAnimZoom=function(){};
+// Marking this renderer non-zoom-animated keeps the dots at a constant
+// on-screen size throughout instead: they just hold still and redraw in
+// place once the zoom stops, rather than stretching.
+hydRend._zoomAnimated=false;
 const casings=[],fills=[];
 R.forEach(r=>{
   const ll=[];for(let i=0;i<r[2].length;i+=2)ll.push([r[2][i+1],r[2][i]]);
