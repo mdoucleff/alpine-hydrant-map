@@ -461,7 +461,7 @@ function findNear(lat,lon,fromMe,acc,center){
   panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
   $('done').onclick=()=>{clearMarks();idle();pauseFollowing();};
   const bb=L.latLngBounds([[lat,lon]]);top.forEach(c=>{bb.extend([c.h.y,c.h.x]);(c.pts||[]).forEach(p=>bb.extend(p));});
-  if(center==='fit')fitPadded(bb,18);           // first fix, or resuming after a pan: frame the routes
+  if(center==='fit')fitPadded(bb,19);           // first fix, or resuming after a pan: frame the routes
   else if(center==='pan')map.panTo([lat,lon]);   // later ticks while following: just recentre, keep zoom
 }
 let watchId=null,following=false,needsFit=false,lastFix=null;
