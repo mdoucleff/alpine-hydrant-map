@@ -5,11 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Alpine TX Hydrant Map</title>
 <script>
+// PWA installation (manifest + service worker) is temporarily suspended --
+// the app should behave like a normal web page for now. Flip this back to
+// true to re-enable it later; every place that reads it is marked below,
+// and nothing else needs to change.
+window.PWA_ENABLED=false;
 // Build the manifest at runtime so start_url/scope/icon always point at
 // wherever this page actually is — not a filename we guessed at build
 // time. Whatever URL just loaded successfully is, by definition, a URL
 // that works, so that's what an installed shortcut should reopen.
 (function(){
+  if(!window.PWA_ENABLED)return;
   try{
     var here=location.href.split('#')[0].split('?')[0];
     var dir=here.slice(0,here.lastIndexOf('/')+1);
@@ -1246,7 +1252,7 @@ styleRoads();styleMarkers();drawLabels();idle();
 // for everyone if the wording ever changes materially.
 const DISCLAIMER_VERSION='2';
 const disc=$('disclaimer');
-{ // show only the install tip for the platform actually being used
+if(window.PWA_ENABLED){ // show only the install tip for the platform actually being used
   const ua=navigator.userAgent;
   const isIOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   const isAndroid=/Android/.test(ua);
@@ -1283,6 +1289,16 @@ const mq=window.matchMedia('(prefers-color-scheme: dark)');
 // open of this file will simply skip this block and work as before.
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   window.addEventListener('load', () => {
+    if (!window.PWA_ENABLED) {
+      // Installation is temporarily suspended (see the flag at the top of
+      // the page). Actively undo it for anyone who already has the old
+      // service worker active from before, so this behaves like a normal
+      // web app for them too -- not just for new visitors who never had
+      // it registered in the first place.
+      navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister())).catch(() => {});
+      if (window.caches) caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
+      return;
+    }
     // tell the worker which exact URL to precache — see the comment in sw.js
     navigator.serviceWorker.register('./sw.js?page=' + encodeURIComponent(location.pathname + location.search))
       .then((reg) => {
