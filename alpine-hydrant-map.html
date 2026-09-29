@@ -1001,13 +1001,16 @@ function popupHtml(h){
   // a 2-letter diagonal at a real 4-way (NE/NW/SE/SW), or a single letter
   // at a T where only one street continues through (N/S/E/W side of it).
   const badge=h.corner?'<div class="cornerbadge">'+h.corner+(h.corner.length===2?' CORNER':' SIDE')+'</div>':'';
-  const reportBody='Hydrant: '+h.n+'\nLocation: '+h.y.toFixed(6)+', '+h.x.toFixed(6)
+  const hydSummary='Hydrant: '+h.n+'\nLocation: '+h.y.toFixed(6)+', '+h.x.toFixed(6)
    +(h.s.length?'\nNearest streets: '+h.s.slice(0,2).map(s=>s[0]).join(', '):'')
-   +'\nCurrent status shown on map: '+CAT[h.c].label
-   +'\n\nWhat\'s wrong? (describe below)\n';
+   +'\nCurrent status shown on map: '+CAT[h.c].label;
+  const reportBody=hydSummary+'\n\nWhat\'s wrong? (describe below)\n';
+  const today=new Date().toISOString().slice(0,10);
+  const confirmBody=hydSummary+'\n\nConfirmed correct in person on '+today+'.\n';
   return '<div class="pop">'+badge+(addr?'<h3>'+addr+'</h3>':'')
    +'<div class="status"><span class="dot" style="background:'+CAT[h.c].fill+'"></span>'+esc(CAT[h.c].label)+'</div>'
    +'<div class="row" style="margin-top:8px"><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+h.y+','+h.x+'">Directions</a>'
+   +' &middot; '+reportLink('Hydrant confirmed: '+h.n,confirmBody,'Confirm this is correct')
    +' &middot; '+reportLink('Hydrant report: '+h.n,reportBody,'Report a problem')+'</div></div>';
 }
 // A simple front-view hydrant silhouette, one flat colour (status) with
