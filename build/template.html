@@ -98,6 +98,7 @@ details ul{margin:6px 0 0;padding-left:16px}
 #sheet .dist{grid-row:span 2;text-align:right;font-weight:700;white-space:nowrap}
 #sheet .dist small{display:block;font-weight:500;color:var(--muted);font-size:11px}
 #sheet .s{grid-column:2;color:var(--muted);font-size:12px}
+#sheet .s.rail{color:var(--accent);font-weight:700}
 #sheet .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;padding:8px 14px;border-radius:18px;border:1.5px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
 .btn.primary{background:#1a73e8;border-color:#1a73e8;color:#fff}
@@ -156,7 +157,7 @@ details ul{margin:6px 0 0;padding-left:16px}
   <button id="locate" aria-label="Find hydrants near my location"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>My location</span></button>
   <button id="fit">Fit Alpine</button>
 </div>
-<div id="credit">Streets: U.S. Census Bureau TIGER/Line 2024, Brewster County &middot; Hydrants: Alpine Hydrants_9_23_26_Update.kmz &middot; Reference only, not surveyed</div>
+<div id="credit">Streets &amp; railroads: U.S. Census Bureau TIGER/Line 2024, Brewster County &middot; Hydrants: Alpine Hydrants_9_23_26_Update.kmz &middot; Reference only, not surveyed</div>
 <div id="disclaimer" role="alertdialog" aria-modal="true" aria-labelledby="disc-h">
   <div class="card">
     <h2 id="disc-h">Before you use this map</h2>
@@ -174,6 +175,7 @@ details ul{margin:6px 0 0;padding-left:16px}
 const H=/*HYDRANTS*/;
 const RN=/*ROADNAMES*/;
 const R=/*ROADS*/;
+const RAIL=/*RAIL*/;
 (function(){
 "use strict";
 const $=id=>document.getElementById(id);
@@ -212,6 +214,36 @@ function styleRoads(){
     const minor=o.c==='S1730'||o.c==='S1780'||o.c==='S1640';
     o.l.setStyle({color:track?tr:(minor?mn:st),weight:Math.max(w,.8),opacity:1,dashArray:track?DASH[o.c]:null});
   });
+}
+
+/* ---------- railroad tracks ---------- */
+map.createPane('rail').style.zIndex=400; // above roads, below hydrants
+const railRend=L.canvas({pane:'rail',padding:.4});
+RAIL.forEach(flat=>{
+  const ll=[];for(let i=0;i<flat.length;i+=2)ll.push([flat[i+1],flat[i]]);
+  // solid bed + a tight white dash on top to read as ties, the usual
+  // simplified way to draw track on a web map without a real hatch pattern
+  L.polyline(ll,{renderer:railRend,interactive:false,color:'#241f1a',weight:4,lineCap:'round',lineJoin:'round'}).addTo(map);
+  L.polyline(ll,{renderer:railRend,interactive:false,color:'#fff',weight:4,dashArray:'1 7',lineCap:'butt'}).addTo(map);
+});
+// Flat list of [x1,y1,x2,y2] (lon,lat) segments, for testing whether a
+// computed hydrant route actually crosses a track -- see findNear().
+const railSegs=[];
+RAIL.forEach(flat=>{for(let i=0;i<flat.length-2;i+=2)railSegs.push([flat[i],flat[i+1],flat[i+2],flat[i+3]]);});
+function segCross(ax,ay,bx,by,cx,cy,dx,dy){
+  const cr=(ox,oy,px,py,qx,qy)=>(px-ox)*(qy-oy)-(py-oy)*(qx-ox);
+  const d1=cr(cx,cy,dx,dy,ax,ay), d2=cr(cx,cy,dx,dy,bx,by);
+  const d3=cr(ax,ay,bx,by,cx,cy), d4=cr(ax,ay,bx,by,dx,dy);
+  return ((d1>0)!==(d2>0)) && ((d3>0)!==(d4>0));
+}
+function routeCrossesRail(pts){ // pts: [[lat,lon],...] as used elsewhere in this file
+  for(let i=0;i<pts.length-1;i++){
+    const ax=pts[i][1],ay=pts[i][0],bx=pts[i+1][1],by=pts[i+1][0];
+    for(const [cx,cy,dx,dy] of railSegs){
+      if(segCross(ax,ay,bx,by,cx,cy,dx,dy))return true;
+    }
+  }
+  return false;
 }
 
 /* ---------- street labels (canvas overlay) ---------- */
@@ -472,6 +504,7 @@ function findNear(lat,lon,fromMe,acc,center){
     if(first)routeLayer.addLayer(L.polyline(pts,{renderer:routeRend,color:'#fff',weight:10,opacity:.9,interactive:false,lineCap:'round',lineJoin:'round'}));
     routeLayer.addLayer(L.polyline(pts,{renderer:routeRend,color:BLUE,weight:first?6:3.5,opacity:first?.95:.75,dashArray:first?null:'7 7',interactive:false,lineCap:'round',lineJoin:'round'}));
     c.pts=pts;
+    c.rail=routeCrossesRail(pts);
   });
   if(isFinite(top[0].road))routeLayer.addLayer(L.circleMarker([top[0].h.y,top[0].h.x],{renderer:routeRend,radius:14,color:BLUE,weight:3,fill:false,interactive:false}));
   const items=top.map((c,i)=>{
@@ -479,7 +512,8 @@ function findNear(lat,lon,fromMe,acc,center){
     return '<li><button data-i="'+H.indexOf(c.h)+'"><span class="rank'+(i===0?' first':'')+'">'+(i+1)+'</span>'
      +'<span class="t">'+esc(c.h.n)+(c.h.c==='yellow'?'<small>Low pressure</small>':c.h.c==='purple'?'<small>Storage supply tank</small>':'')+'</span>'
      +'<span class="dist">'+(isFinite(c.road)?fmtFt(c.road)+'<small>by street</small>':'no route<small>street network</small>')+'</span>'
-     +'<span class="s">'+(near?'near '+esc(near)+' &middot; ':'')+fmtFt(c.st)+' '+dir+' straight line</span></button></li>';
+     +'<span class="s">'+(near?'near '+esc(near)+' &middot; ':'')+fmtFt(c.st)+' '+dir+' straight line</span>'
+     +(c.rail?'<span class="s rail">&#9888; crosses railroad tracks</span>':'')+'</button></li>';
   }).join('');
   show('<h2>Closest hydrants</h2><p>'+(fromMe?'From your location'+(acc?' (&plusmn;'+fmtFt(acc*FT)+')':''):'From the blue pin')
     +'. Distances follow the streets. Hydrants marked Not Working are skipped.</p>'

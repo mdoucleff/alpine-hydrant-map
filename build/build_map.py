@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Assemble alpine-hydrant-map.html (and index.html) from:
   - build/cache/pts.json, roads.pkl   (run parse_sources.py first)
+  - alpine-rail.geojson               (Alpine-area TIGER/Line railroads)
   - build/vendor/leaflet.css, leaflet.js
   - build/template.html
 
@@ -11,6 +12,20 @@ import json, pickle, math, re, pathlib
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 CACHE = HERE / 'cache'
+
+
+def load_rail():
+    """Flatten alpine-rail.geojson into the same [lon,lat,lon,lat,...]-per-
+    part shape the road data uses, for embedding and for drawing."""
+    gj = json.load(open(ROOT / 'alpine-rail.geojson'))
+    parts = []
+    for feat in gj['features']:
+        for part in feat['geometry']['coordinates']:
+            flat = []
+            for x, y in part:
+                flat += [round(x, 6), round(y, 6)]
+            parts.append(flat)
+    return parts
 
 COLOR_BY_STYLE = {
     'IconStyle30': 'red',      # Good
@@ -181,6 +196,8 @@ def build_roads_and_streets(H):
 def main():
     H = load_hydrants()
     R, names = build_roads_and_streets(H)
+    RAIL = load_rail()
+    print('rail parts', len(RAIL))
 
     css = (HERE / 'vendor' / 'leaflet.css').read_text(encoding='utf-8')
     js = (HERE / 'vendor' / 'leaflet.js').read_text(encoding='utf-8')
@@ -191,7 +208,8 @@ def main():
            .replace('/*LEAFLET_JS*/', js)
            .replace('/*HYDRANTS*/', json.dumps(H, separators=(',', ':')))
            .replace('/*ROADNAMES*/', json.dumps(names, separators=(',', ':')))
-           .replace('/*ROADS*/', json.dumps(R, separators=(',', ':'))))
+           .replace('/*ROADS*/', json.dumps(R, separators=(',', ':')))
+           .replace('/*RAIL*/', json.dumps(RAIL, separators=(',', ':'))))
 
     (ROOT / 'alpine-hydrant-map.html').write_text(out, encoding='utf-8')
     (ROOT / 'index.html').write_text(out, encoding='utf-8')  # what GitHub Pages actually serves
