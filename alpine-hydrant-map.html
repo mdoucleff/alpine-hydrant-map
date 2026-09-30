@@ -1163,6 +1163,88 @@ function pathTo(s,rt,via,h,ll){
 const CAND=H.filter(h=>h.c!=='black');
 CAND.forEach(h=>{h.ft=toFt(h.y,h.x);h.sn=snap(h.ft[0],h.ft[1]);});
 
+/* ============ EXPERIMENTAL: hydrant-coverage heatmap ============
+   Tints short chunks of every routed street by network distance (along
+   the roads, not straight-line) to the nearest reliable water source --
+   a Good hydrant or any Storage Supply Tank. Not Working, Low Pressure
+   and Unknown-condition sources don't count as "reliable" here. Cool
+   (blue) = close to water, hot (red) = far.
+   Off by default; built lazily (once) the first time its checkbox in
+   the legend is ticked, so it costs nothing for anyone who never turns
+   it on. Entirely self-contained -- to roll this whole feature back,
+   delete this block and its "Coverage" legend row below. */
+map.createPane('coverage').style.zIndex=310; // above plain road color, below labels/rail/routes/hydrants
+const COVERAGE_MAX_FT=1000; // network distance, in feet, at which the color scale reaches full "hot" -- tune freely
+const COVERAGE_CHUNK_FT=200; // length of each individually-colored road chunk ("short segments")
+function coverageColor(t){ // t: 0 (near water) .. 1 (far from water)
+  t=Math.max(0,Math.min(1,t));
+  const stops=[[0,26,115,232],[.25,0,229,255],[.5,76,175,80],[.75,255,235,59],[1,244,67,54]];
+  for(let i=1;i<stops.length;i++){
+    if(t>stops[i][0]&&i<stops.length-1)continue;
+    const[t0,r0,g0,b0]=stops[i-1],[t1,r1,g1,b1]=stops[i],f=(t-t0)/(t1-t0||1);
+    return'rgb('+Math.round(r0+(r1-r0)*f)+','+Math.round(g0+(g1-g0)*f)+','+Math.round(b0+(b1-b0)*f)+')';
+  }
+}
+let covGroup=null;
+function buildCoverage(){
+  // Multi-source Dijkstra: seed every reliable source's snapped point at
+  // its own distance-0, then relax outward ONCE across the whole graph --
+  // this gives every node's distance to its NEAREST such source in one
+  // pass, instead of running a separate search per source.
+  const dist=new Float64Array(NN).fill(Infinity),heap=[];
+  const push=(d,n)=>{heap.push([d,n]);let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p][0]<=heap[i][0])break;[heap[p],heap[i]]=[heap[i],heap[p]];i=p;}};
+  const pop=()=>{const top=heap[0],last=heap.pop();if(heap.length){heap[0]=last;let i=0;for(;;){const l=2*i+1,r=l+1;let m=i;if(l<heap.length&&heap[l][0]<heap[m][0])m=l;if(r<heap.length&&heap[r][0]<heap[m][0])m=r;if(m===i)break;[heap[m],heap[i]]=[heap[i],heap[m]];i=m;}}return top;};
+  CAND.filter(h=>h.t||h.c==='red').forEach(h=>{
+    const sn=h.sn,a=EA[sn.e],b=EB[sn.e],w=EW[sn.e];
+    if(sn.t*w<dist[a])dist[a]=sn.t*w;
+    if((1-sn.t)*w<dist[b])dist[b]=(1-sn.t)*w;
+  });
+  for(let n=0;n<NN;n++)if(dist[n]<Infinity)push(dist[n],n);
+  while(heap.length){
+    const[d,n]=pop();
+    if(d>dist[n])continue;
+    for(const[m,ww]of ADJ[n]){const nd=d+ww;if(nd<dist[m]){dist[m]=nd;push(nd,m);}}
+  }
+  // Walk every routed road part again (same S1500 exclusion as the graph
+  // build above), chopping each vertex-to-vertex stretch into
+  // ~COVERAGE_CHUNK_FT pieces and coloring each by the distance
+  // interpolated between its two now-known endpoints.
+  const lines=[];
+  R.forEach(r=>{
+    if(r[1]==='S1500')return;
+    const p=r[2];
+    for(let i=0;i<p.length-2;i+=2){
+      const lon0=p[i],lat0=p[i+1],lon1=p[i+2],lat1=p[i+3];
+      const n0=nodeIdx.get(Math.round(lon0*1e5)+','+Math.round(lat0*1e5));
+      const n1=nodeIdx.get(Math.round(lon1*1e5)+','+Math.round(lat1*1e5));
+      if(n0===undefined||n1===undefined||n0===n1)continue;
+      const d0=dist[n0],d1=dist[n1];
+      if(!isFinite(d0)&&!isFinite(d1))continue; // unreachable stretch -- nothing meaningful to show
+      const af=toFt(lat0,lon0),bf=toFt(lat1,lon1),lenFt=Math.hypot(bf[0]-af[0],bf[1]-af[1]);
+      const steps=Math.max(1,Math.round(lenFt/COVERAGE_CHUNK_FT));
+      for(let s=0;s<steps;s++){
+        const t0=s/steps,t1=(s+1)/steps,tm=(t0+t1)/2;
+        const dMid=(isFinite(d0)&&isFinite(d1))?d0+(d1-d0)*tm:(isFinite(d0)?d0:d1);
+        lines.push(L.polyline([[lat0+(lat1-lat0)*t0,lon0+(lon1-lon0)*t0],[lat0+(lat1-lat0)*t1,lon0+(lon1-lon0)*t1]],
+          {renderer:covRend,interactive:false,lineCap:'round',color:coverageColor(dMid/COVERAGE_MAX_FT),weight:5,opacity:.85}));
+      }
+    }
+  });
+  covGroup=L.layerGroup(lines);
+}
+const covRend=L.canvas({pane:'coverage',padding:.4});
+const covLabel=document.createElement('label');
+covLabel.innerHTML='<input type="checkbox"><span class="sw sq" style="background:linear-gradient(90deg,'
+ +[0,.25,.5,.75,1].map(coverageColor).join(',')+')"></span>Coverage (beta): distance to water';
+covLabel.querySelector('input').addEventListener('change',e=>{
+  if(e.target.checked){
+    if(!covGroup)buildCoverage();
+    covGroup.addTo(map);
+  }else if(covGroup)map.removeLayer(covGroup);
+});
+lg.appendChild(covLabel);
+/* ============ end experimental hydrant-coverage heatmap ============ */
+
 /* ---------- nearest-hydrant UI ---------- */
 map.createPane('routes').style.zIndex=450;
 const routeRend=L.canvas({pane:'routes',padding:.4});
