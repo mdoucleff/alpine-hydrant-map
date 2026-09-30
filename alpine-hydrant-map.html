@@ -1244,7 +1244,7 @@ function buildCoverage(){
 const covRend=L.canvas({pane:'coverage',padding:.4});
 const covLabel=document.createElement('label');
 covLabel.innerHTML='<input type="checkbox"><span class="sw sq" style="background:linear-gradient(90deg,'
- +[0,.25,.5,.75,1].map(coverageColor).join(',')+')"></span>Coverage (beta): distance to water';
+ +[0,.25,.5,.75,1].map(coverageColor).join(',')+')"></span>Coverage: distance to water';
 covLabel.querySelector('input').addEventListener('change',e=>{
   if(e.target.checked){
     if(!covGroup)buildCoverage();
