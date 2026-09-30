@@ -1344,8 +1344,7 @@ $('fit').addEventListener('click',fit);
 // map has ever had one, which this line is establishing for the first time.
 // Everything after this point (the "Fit Alpine" button, GPS zero-in) can
 // safely use the animated `fit`/flyToBounds.
-map.fitBounds(coreBounds.pad(.06));
-map.setZoom(map.getZoom()+1); // a bit closer than the full-town fit, just for this first paint before GPS tweens in
+map.fitBounds(coreBounds.pad(.06)); // initial view: fit most of the city, not zoomed in past that
 styleRoads();styleMarkers();drawLabels();idle();
 // Data-accuracy disclaimer: must be explicitly accepted once per device
 // before GPS tracking starts. Bump DISCLAIMER_VERSION to make it reappear
