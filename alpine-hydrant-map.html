@@ -765,6 +765,8 @@ details ul{margin:6px 0 0;padding-left:16px}
 #sheet.tray{cursor:pointer;max-height:none}
 .tray-tab{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;font-size:14px}
 .tray-tab small{font-weight:500;color:var(--muted);font-size:11px}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer}
+.sheet-head small{font-weight:500;color:var(--muted);font-size:11px}
 .btn{display:inline-flex;align-items:center;padding:8px 14px;border-radius:18px;border:1.5px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
 .btn.primary{background:#1a73e8;border-color:#1a73e8;color:#fff}
 .warn{margin:6px 0;padding:6px 8px;border-radius:6px;background:color-mix(in srgb,#e8a100 22%,transparent);font-size:12px}
@@ -1279,16 +1281,20 @@ function idle(){
 // GPS update still moves the map/draws the route as usual but won't pop
 // the list back open on its own. Only tapping the tray itself reopens it.
 let sheetClosed=false;
+// The tray sits at the bottom of the screen on narrow/mobile layouts
+// (expanding it reveals more content ABOVE the tab) but near the
+// top-right on wide/desktop layouts (expanding reveals content BELOW
+// it instead) -- same breakpoint the CSS itself switches #sheet's
+// position at. The arrow always points toward where the content is
+// about to appear from (opening) or collapse into (closing).
+function trayArrow(opening){
+  const mobile=window.innerWidth<=760;
+  return (mobile===opening)?'&#9650;':'&#9660;';
+}
 function closeSheet(){
   sheetClosed=true;
   sheet.classList.add('tray');
-  // The tray sits at the bottom of the screen on narrow/mobile layouts
-  // (expanding it reveals more content ABOVE the tab, hence an up arrow)
-  // but near the top-right on wide/desktop layouts (expanding reveals
-  // content BELOW it instead, hence a down arrow) -- same breakpoint the
-  // CSS itself switches #sheet's position at.
-  const arrow=window.innerWidth<=760?'&#9650;':'&#9660;';
-  show('<div class="tray-tab">Closest hydrants '+arrow+'<small>tap to reopen</small></div>');
+  show('<div class="tray-tab">Closest hydrants '+trayArrow(true)+'<small>tap to reopen</small></div>');
   panel.querySelector('.tray-tab').onclick=openSheet;
 }
 function openSheet(){
@@ -1373,14 +1379,20 @@ function findNear(lat,lon,fromMe,acc,center){
   // updates (no "My location" turning into a dead button), and reopening
   // it later shows this same, possibly-since-updated, result.
   paint(()=>{
-    show('<h2>Closest hydrants</h2><p>'+(fromMe?'From your location'+(acc?' (&plusmn;'+fmtFt(acc*FT)+')':''):'From the blue pin')
+    // The header itself is the only way to close the list now -- tapping
+    // it collapses to the tray (leaving the pin/route/highlight on the
+    // map, same as the old Close button did) just like tapping the tray
+    // reopens it. The arrow + "tap to close" label make that affordance
+    // explicit instead of relying on it just being a heading.
+    show('<h2 class="sheet-head">Closest hydrants '+trayArrow(false)+'<small>tap to close</small></h2>'
+      +'<p>'+(fromMe?'From your location'+(acc?' (&plusmn;'+fmtFt(acc*FT)+')':''):'From the blue pin')
       +'. Distances follow the streets. Hydrants marked Not Working are skipped.</p>'
       +(s.d>250?'<div class="warn">This spot is about '+fmtFt(s.d)+' from the nearest mapped street; that distance is included.</div>':'')
-      +'<ul>'+items+'</ul><div class="actions"><button class="btn" id="done">Close</button>'
+      +'<ul>'+items+'</ul><div class="actions">'
       +reportLink('Hydrant not on the map, near '+lat.toFixed(4)+','+lon.toFixed(4),missingBody,'Report a hydrant missing from this map','btn')
       +'</div>');
     panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
-    $('done').onclick=()=>{closeSheet();pauseFollowing();}; // leave the pin/route/highlight on the map -- Close just collapses the list text
+    panel.querySelector('.sheet-head').onclick=()=>{closeSheet();pauseFollowing();};
   });
   const bb=L.latLngBounds([[lat,lon]]);top.forEach(c=>{bb.extend([c.h.y,c.h.x]);(c.pts||[]).forEach(p=>bb.extend(p));});
   if(center==='fit')fitPadded(bb,19,[lat,lon]); // first fix, or resuming after a pan: fit the routes, centred on the dot
