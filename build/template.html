@@ -695,7 +695,7 @@ function findNear(lat,lon,fromMe,acc,center){
     show('<h2>Closest hydrants</h2><p>'+(fromMe?'From your location'+(acc?' (&plusmn;'+fmtFt(acc*FT)+')':''):'From the blue pin')
       +'. Distances follow the streets. Hydrants marked Not Working are skipped.</p>'
       +(s.d>250?'<div class="warn">This spot is about '+fmtFt(s.d)+' from the nearest mapped street; that distance is included.</div>':'')
-      +'<ul>'+items+'</ul><div class="actions"><button class="btn" id="done">Clear</button>'
+      +'<ul>'+items+'</ul><div class="actions"><button class="btn" id="done">Close</button>'
       +reportLink('Hydrant not on the map, near '+lat.toFixed(4)+','+lon.toFixed(4),missingBody,'Report a hydrant missing from this map','btn')
       +'</div>');
     panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
