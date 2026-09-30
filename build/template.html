@@ -780,13 +780,17 @@ function locateFail(err){
     :'Your location could not be found (no GPS fix). Try again outdoors or with Wi-Fi on, or tap the map at your spot instead.';
   show('<h2>Location not available</h2><p>'+msg+'</p><p style="font-size:11px">Details: code '+err.code+(err.message?' &mdash; '+esc(err.message):'')+'</p>');
 }
-function locate(){
+function locate(zoomToFit){
   const btn=$('locate');
   if(!navigator.geolocation){show('<h2>Location unavailable</h2><p>This browser can\'t share its location. Tap the map at your spot instead.</p>');return;}
   if(!window.isSecureContext){
     show('<h2>Location is blocked on this page</h2><p>Phones only share GPS with pages opened from a secure <b>https://</b> address. This page was opened from a file or an http:// address, which iPhone Safari refuses (Android is more lenient). Put the file on an https site and open it from there, or tap the map at your spot instead.</p>');return;
   }
-  following=true;needsFit=true;btn.classList.add('following');
+  // Only the very first, automatic locate() on page load zooms in to fit
+  // the GPS dot + nearest hydrants -- every later press of "My location"
+  // (whether starting tracking fresh or resuming after a pan) just pans
+  // to recentre on the dot, keeping whatever zoom the user is already at.
+  following=true;needsFit=!!zoomToFit;btn.classList.add('following');
   if(watchId!==null){ // already tracking (following was just paused by a manual pan): resume now
     if(lastFix)applyFix(lastFix);
     return;
@@ -799,7 +803,7 @@ function locate(){
   },{enableHighAccuracy:true,timeout:10000,maximumAge:15000});
   watchId=navigator.geolocation.watchPosition(applyFix,locateFail,{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
 }
-$('locate').addEventListener('click',locate);
+$('locate').addEventListener('click',()=>locate(false));
 map.on('dragstart',()=>{ // the user grabbed the map: stop auto-recentring until "My location" is pressed again
   if(following){following=false;$('locate').classList.remove('following');}
 });
@@ -838,7 +842,7 @@ if(window.PWA_ENABLED){ // show only the install tip for the platform actually b
   else if(isAndroid)disc.querySelector('.install.android').classList.add('show');
 }
 function startAfterDisclaimer(){
-  locate(); // start tracking automatically; falls back to the idle/tap message if location is unavailable or denied
+  locate(true); // start tracking automatically, zoomed to fit -- falls back to the idle/tap message if location is unavailable or denied
 }
 let accepted=false;
 try{accepted=localStorage.getItem('hydrantDisclaimer')===DISCLAIMER_VERSION;}catch(e){}
