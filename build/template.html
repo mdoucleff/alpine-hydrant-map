@@ -699,7 +699,7 @@ function findNear(lat,lon,fromMe,acc,center){
       +reportLink('Hydrant not on the map, near '+lat.toFixed(4)+','+lon.toFixed(4),missingBody,'Report a hydrant missing from this map','btn')
       +'</div>');
     panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
-    $('done').onclick=()=>{clearMarks();closeSheet();pauseFollowing();};
+    $('done').onclick=()=>{closeSheet();pauseFollowing();}; // leave the pin/route/highlight on the map -- Close just collapses the list text
   }
   const bb=L.latLngBounds([[lat,lon]]);top.forEach(c=>{bb.extend([c.h.y,c.h.x]);(c.pts||[]).forEach(p=>bb.extend(p));});
   if(center==='fit')fitPadded(bb,19,[lat,lon]); // first fix, or resuming after a pan: fit the routes, centred on the dot
