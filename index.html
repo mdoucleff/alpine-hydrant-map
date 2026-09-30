@@ -1282,7 +1282,13 @@ let sheetClosed=false;
 function closeSheet(){
   sheetClosed=true;
   sheet.classList.add('tray');
-  show('<div class="tray-tab">Closest hydrants &#9650;<small>tap to reopen</small></div>');
+  // The tray sits at the bottom of the screen on narrow/mobile layouts
+  // (expanding it reveals more content ABOVE the tab, hence an up arrow)
+  // but near the top-right on wide/desktop layouts (expanding reveals
+  // content BELOW it instead, hence a down arrow) -- same breakpoint the
+  // CSS itself switches #sheet's position at.
+  const arrow=window.innerWidth<=760?'&#9650;':'&#9660;';
+  show('<div class="tray-tab">Closest hydrants '+arrow+'<small>tap to reopen</small></div>');
   panel.querySelector('.tray-tab').onclick=openSheet;
 }
 function openSheet(){
@@ -1458,7 +1464,7 @@ map.on('click',e=>{
   pauseFollowing(); // a manual tap means "I'm looking at this spot" for now, but the dot keeps moving
   findNear(e.latlng.lat,e.latlng.lng,false);
 });
-window.addEventListener('resize',setSheetH);
+window.addEventListener('resize',()=>{setSheetH();if(sheetClosed)closeSheet();}); // re-picks the tray arrow if the layout crosses the 760px breakpoint
 if(window.innerWidth<=760)$('info').classList.add('compact');
 document.querySelector('#info h1').addEventListener('click',()=>{if(window.innerWidth<=760)$('info').classList.toggle('compact')});
 
