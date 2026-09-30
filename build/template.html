@@ -395,7 +395,16 @@ Object.keys(CAT).forEach(k=>{
   if(!counts[k])return;
   const l=document.createElement('label');
   l.innerHTML='<input type="checkbox" checked><span class="sw'+''+'" style="background:'+CAT[k].fill+'"></span>'+CAT[k].label+'<span class="n">'+counts[k]+'</span>';
-  l.querySelector('input').addEventListener('change',e=>{e.target.checked?groups[k].addTo(map):map.removeLayer(groups[k]);});
+  l.querySelector('input').addEventListener('change',e=>{
+    if(e.target.checked){
+      // Leaflet discards a marker's icon element on removal and builds a
+      // fresh, default-sized one when re-added -- it never re-gets the
+      // width/height styleMarkers() set on the old element, so without
+      // this the re-checked hydrants are technically back but sized ~1px
+      // (invisible) until the next zoom happens to call styleMarkers().
+      groups[k].addTo(map);styleMarkers();
+    }else map.removeLayer(groups[k]);
+  });
   lg.appendChild(l);
 });
 const nHyd=H.filter(h=>!h.t).length;
