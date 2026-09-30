@@ -448,7 +448,7 @@ $('q').addEventListener('input',e=>{
   if(hits.length===1){map.setView(hits[0].getLatLng(),Math.max(map.getZoom(),18));hits[0].openPopup();}
   else map.fitBounds(b.pad(.25),{maxZoom:18});
 });
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('q').value='';$('msg').textContent='';map.closePopup();clearMarks();openSheet();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('q').value='';$('msg').textContent='';map.closePopup();clearMarks();lastPaint=null;openSheet();}});
 
 /* ---------- routing graph (built from the TIGER streets) ---------- */
 const FT=3.28084,LAT0=30.365,KY=110574*FT,KX=111320*Math.cos(LAT0*Math.PI/180)*FT;
@@ -622,8 +622,15 @@ function closeSheet(){
 function openSheet(){
   sheetClosed=false;
   sheet.classList.remove('tray');
-  idle();
+  if(lastPaint)lastPaint();else idle();
 }
+// Every result findNear() computes is remembered here (even while the
+// tray is collapsed and nothing is actually painted to screen), so that
+// reopening the tray shows whatever is CURRENTLY selected -- including
+// one that changed while it was closed, e.g. from a GPS update -- not
+// just whatever was on screen at the moment it was closed.
+let lastPaint=null;
+function paint(fn){lastPaint=fn;if(!sheetClosed)fn();}
 function fitPadded(bb,maxZ,gpsLL){
   const wide=window.innerWidth>760;
   const opts={paddingTopLeft:wide?[300,30]:[20,90],paddingBottomRight:wide?[390,30]:[20,sheet.offsetHeight+30],maxZoom:maxZ};
@@ -659,7 +666,7 @@ function findNear(lat,lon,fromMe,acc,center){
   const [x,y]=toFt(lat,lon);
   const cands=CAND.map(h=>({h,st:Math.hypot(h.ft[0]-x,h.ft[1]-y)}));
   if(Math.min(...cands.map(c=>c.st))>8000){
-    if(!sheetClosed)show('<h2>Outside the hydrant map</h2><p>'+(fromMe?'Your location is':'That spot is')+' more than a mile and a half from any hydrant. Tap a spot in town instead.</p>');
+    paint(()=>show('<h2>Outside the hydrant map</h2><p>'+(fromMe?'Your location is':'That spot is')+' more than a mile and a half from any hydrant. Tap a spot in town instead.</p>'));
     return;
   }
   if(!fromMe)pin=L.marker([lat,lon],{interactive:false,icon:L.divIcon({className:'',html:'<div class="pin"></div>',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(map);
@@ -688,10 +695,12 @@ function findNear(lat,lon,fromMe,acc,center){
     +'\nNearest hydrant already on the map: '+(isFinite(top[0].road)?top[0].h.n+', '+fmtFt(top[0].road)+' by street':top[0].h.n)
     +'\n\nWhat did you find? (describe below -- status, whether it\'s missing entirely, wrong position, etc.)\n';
   // The map itself (pin, route, highlighted hydrant, camera move below)
-  // updates regardless of sheetClosed -- only repainting the actual list
-  // text is gated, so a closed tray really does stay closed through taps
-  // and GPS updates, without "My location" turning into a dead button.
-  if(!sheetClosed){
+  // updates regardless of sheetClosed. The list text is remembered via
+  // paint() either way, but only actually painted to screen while the
+  // tray is open -- so a closed tray stays closed through taps and GPS
+  // updates (no "My location" turning into a dead button), and reopening
+  // it later shows this same, possibly-since-updated, result.
+  paint(()=>{
     show('<h2>Closest hydrants</h2><p>'+(fromMe?'From your location'+(acc?' (&plusmn;'+fmtFt(acc*FT)+')':''):'From the blue pin')
       +'. Distances follow the streets. Hydrants marked Not Working are skipped.</p>'
       +(s.d>250?'<div class="warn">This spot is about '+fmtFt(s.d)+' from the nearest mapped street; that distance is included.</div>':'')
@@ -700,7 +709,7 @@ function findNear(lat,lon,fromMe,acc,center){
       +'</div>');
     panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
     $('done').onclick=()=>{closeSheet();pauseFollowing();}; // leave the pin/route/highlight on the map -- Close just collapses the list text
-  }
+  });
   const bb=L.latLngBounds([[lat,lon]]);top.forEach(c=>{bb.extend([c.h.y,c.h.x]);(c.pts||[]).forEach(p=>bb.extend(p));});
   if(center==='fit')fitPadded(bb,19,[lat,lon]); // first fix, or resuming after a pan: fit the routes, centred on the dot
   else if(center==='pan'&&!flying)map.panTo([lat,lon]); // later ticks while following: just recentre, keep zoom (unless a flyTo from 'fit' is still landing)
