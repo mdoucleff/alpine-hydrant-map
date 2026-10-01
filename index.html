@@ -1384,12 +1384,11 @@ function findNear(lat,lon,fromMe,acc,center){
     panel.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>selectHydrant(H[+b.dataset.i]));
     panel.querySelector('.sheet-head').onclick=()=>{closeSheet();pauseFollowing();};
   });
-  // 'fit' only ever happens once -- the very first fix after page load
-  // (see locate()'s zoomToFit param) -- and jumps straight to the
-  // neighborhood zoom level with no animation. Every later tick, following
-  // or not, is a plain recentre at whatever zoom the user is already at.
-  if(center==='fit')map.setView([lat,lon],GPS_INITIAL_ZOOM);
-  else if(center==='pan')map.panTo([lat,lon]);
+  // The very first fix's camera jump (needsFit) now happens in applyFix(),
+  // before the dot is even drawn -- see the comment there for why. This is
+  // just the ordinary per-tick recentre while following; a manual tap
+  // passes no `center` at all, so it doesn't move the camera.
+  if(center==='pan')map.panTo([lat,lon]);
 }
 let watchId=null,following=false,needsFit=false,lastFix=null;
 // The blue dot always keeps tracking once started. Clicking a hydrant or an
@@ -1415,6 +1414,18 @@ function applyFix(p){
     // it's always the most recent known position, not whatever it
     // happened to be on this session's very first fix.
     try{localStorage.setItem('hydrantLastFix',ll[0]+','+ll[1]);}catch(e){}
+    // On the very first fix (needsFit), move the camera to the
+    // neighborhood zoom BEFORE drawing the dot/circle/arrow below --
+    // and clear needsFit here, not after, so findNear() further down
+    // never needs to know about this at all. With no stored fix, the
+    // initial view starts zoomed out to the whole town; the accuracy
+    // circle below is geographically sized (drawn with a real-world
+    // radius, not a fixed pixel one like the dot itself), so drawing it
+    // THERE first and only then jumping to a much closer zoom would mean
+    // it visibly has to blow up through that zoom change. Moving the
+    // camera first means it gets drawn fresh, already at its correct
+    // final on-screen size.
+    if(needsFit){map.setView(ll,GPS_INITIAL_ZOOM);needsFit=false;}
     if(me)map.removeLayer(me);
     const layers=[L.circle(ll,{radius:p.coords.accuracy||0,renderer:routeRend,color:BLUE,weight:1,fillColor:BLUE,fillOpacity:.12,interactive:false})];
     // Heading is null whenever the device can't tell which way it's
@@ -1445,8 +1456,7 @@ function applyFix(p){
     // list, picked a hydrant, or panned away must not reopen or overwrite
     // whatever's on screen; it just keeps the dot current for next time.
     if(!following)return;
-    findNear(ll[0],ll[1],true,p.coords.accuracy,needsFit?'fit':'pan');
-    needsFit=false;
+    findNear(ll[0],ll[1],true,p.coords.accuracy,'pan');
   }catch(e){show('<h2>Got your location, but the map failed</h2><p>'+esc(e&&e.message||e)+'</p>');}
 }
 function locateFail(err){
