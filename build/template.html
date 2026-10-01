@@ -719,19 +719,13 @@ function findNear(lat,lon,fromMe,acc,center){
     panel.querySelector('.sheet-head').onclick=()=>{closeSheet();pauseFollowing();};
   });
   // 'fit' only ever happens once -- the very first fix after page load
-  // (see locate()'s zoomToFit param). It's a tween again (flyTo, not
-  // setView) now that it's a same-zoom pan rather than a big zoom change,
-  // so it no longer has the "swoop" that made the old route-fitted flyTo
-  // look bad. `flying` blocks a background tick's plain panTo from
-  // interrupting it mid-flight -- same guard this needed before, just
-  // reattached to the simpler animation.
-  if(center==='fit'){
-    flying=true;
-    map.once('moveend',()=>{flying=false;});
-    map.flyTo([lat,lon],GPS_INITIAL_ZOOM);
-  }else if(center==='pan'&&!flying)map.panTo([lat,lon]);
+  // (see locate()'s zoomToFit param) -- and jumps straight to the
+  // neighborhood zoom level with no animation. Every later tick, following
+  // or not, is a plain recentre at whatever zoom the user is already at.
+  if(center==='fit')map.setView([lat,lon],GPS_INITIAL_ZOOM);
+  else if(center==='pan')map.panTo([lat,lon]);
 }
-let watchId=null,following=false,needsFit=false,lastFix=null,flying=false;
+let watchId=null,following=false,needsFit=false,lastFix=null;
 // The blue dot always keeps tracking once started. Clicking a hydrant or an
 // empty spot, or dragging the map, only stops the CAMERA from following it
 // -- the position keeps updating in the background until "My location" is
@@ -858,25 +852,19 @@ $('fit').addEventListener('click',fit);
 // map has ever had one, which this line is establishing for the first time.
 // Everything after this point (the "Fit Alpine" button, GPS zero-in) can
 // safely use the animated `fit`/flyToBounds.
-// Start already at GPS_INITIAL_ZOOM, rather than zoomed out to fit the
-// whole city -- so if/when the first GPS fix lands, that jump (same zoom
-// level, see findNear()'s center==='fit' branch) is just a plain
-// recentre, not a visible zoom change from a full-town overview down to
-// street level. If GPS never actually works, locateFail() widens back
-// out to the full-town view as a genuine fallback, not a transient flash
-// shown before every normal GPS fix.
-// Centred on the last GPS fix this device ever reported, if we have one
-// saved (see applyFix()) -- a returning user starts out already roughly
-// in the right place, and the pan to the fresh fix becomes a small,
-// unobtrusive correction instead of a full town-centre-to-actual-location
-// jump every single visit. Falls back to the plain town centre for a
-// first-ever visit, or if the saved value is missing/corrupt.
-let startLL=coreBounds.getCenter();
+// If we have a GPS fix this device reported before (see applyFix()),
+// start already zoomed to GPS_INITIAL_ZOOM centred on it -- a returning
+// user starts out roughly in the right place, and the jump to the fresh
+// fix below becomes a small correction instead of a full town-wide one.
+// With no saved fix at all (first-ever visit, or a corrupt saved value),
+// show the whole town instead -- there's nothing better to guess at yet.
+let startLL=null;
 try{
   const saved=(localStorage.getItem('hydrantLastFix')||'').split(',').map(Number);
   if(saved.length===2&&saved.every(isFinite))startLL=saved;
 }catch(e){}
-map.setView(startLL,GPS_INITIAL_ZOOM);
+if(startLL)map.setView(startLL,GPS_INITIAL_ZOOM);
+else map.fitBounds(coreBounds.pad(.06));
 styleRoads();styleMarkers();drawLabels();idle();
 // Data-accuracy disclaimer: must be explicitly accepted once per device
 // before GPS tracking starts. Bump DISCLAIMER_VERSION to make it reappear
