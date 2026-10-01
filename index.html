@@ -777,6 +777,12 @@ details ul{margin:6px 0 0;padding-left:16px}
 @media (prefers-reduced-motion:reduce){.me::before{animation:none;display:none}}
 .pin{width:20px;height:20px;border-radius:50%;background:#fff;border:5px solid #1a73e8;box-shadow:0 1px 5px rgba(0,0,0,.5)}
 .hydicon{background:none;border:none}
+/* A plain DOM ring for highlighting a hydrant, not an L.circleMarker --
+   circleMarker is a Path/Renderer shape and balloons through a zoom
+   transition exactly like the old circleMarker-based hydrant dots did
+   (see the comment above H.forEach() below). box-sizing:border-box
+   keeps the outer size fixed regardless of border-width. */
+.hiring{width:28px;height:28px;border-radius:50%;border:3px solid;box-sizing:border-box;pointer-events:none}
 #info h1{cursor:default}
 @media (max-width:760px){
   #sheet{top:auto;left:0;right:0;bottom:0;width:auto;max-height:46vh;border-radius:14px 14px 0 0}
@@ -1319,10 +1325,13 @@ function openSheet(){
 // just whatever was on screen at the moment it was closed.
 let lastPaint=null;
 function paint(fn){lastPaint=fn;if(!sheetClosed)fn();}
+function hiRing(ll){
+  return L.marker(ll,{interactive:false,keyboard:false,icon:L.divIcon({className:'',html:'<div class="hiring" style="border-color:'+BLUE+'"></div>',iconSize:[28,28],iconAnchor:[14,14]})});
+}
 function selectHydrant(h){
   pauseFollowing();
   hiLayer.clearLayers();
-  hiLayer.addLayer(L.circleMarker([h.y,h.x],{renderer:routeRend,radius:14,color:BLUE,weight:3,fill:false,interactive:false}));
+  hiLayer.addLayer(hiRing([h.y,h.x]));
   if(!map.hasLayer(groups[h.c]))groups[h.c].addTo(map);
   const m=h._m;
   // only move the map if the hydrant is off-screen; otherwise leave the view alone
@@ -1350,7 +1359,7 @@ function findNear(lat,lon,fromMe,acc,center){
     c.pts=pts;
     c.rail=routeCrossesRail(pts);
   });
-  if(isFinite(top[0].road))routeLayer.addLayer(L.circleMarker([top[0].h.y,top[0].h.x],{renderer:routeRend,radius:14,color:BLUE,weight:3,fill:false,interactive:false}));
+  if(isFinite(top[0].road))routeLayer.addLayer(hiRing([top[0].h.y,top[0].h.x]));
   const items=top.map((c,i)=>{
     const dir=bearing(c.h.ft[0]-x,c.h.ft[1]-y),near=nearTxt(c.h);
     return '<li><button data-i="'+H.indexOf(c.h)+'"><span class="rank'+(i===0?' first':'')+'">'+(i+1)+'</span>'
