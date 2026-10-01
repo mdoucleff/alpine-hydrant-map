@@ -1385,13 +1385,19 @@ function findNear(lat,lon,fromMe,acc,center){
     panel.querySelector('.sheet-head').onclick=()=>{closeSheet();pauseFollowing();};
   });
   // 'fit' only ever happens once -- the very first fix after page load
-  // (see locate()'s zoomToFit param) -- so this is a one-time, un-tweened
-  // jump to a fixed zoom, not an animation. Every later tick, following or
-  // not, is a plain recentre at whatever zoom the user is already at.
-  if(center==='fit')map.setView([lat,lon],GPS_INITIAL_ZOOM);
-  else if(center==='pan')map.panTo([lat,lon]);
+  // (see locate()'s zoomToFit param). It's a tween again (flyTo, not
+  // setView) now that it's a same-zoom pan rather than a big zoom change,
+  // so it no longer has the "swoop" that made the old route-fitted flyTo
+  // look bad. `flying` blocks a background tick's plain panTo from
+  // interrupting it mid-flight -- same guard this needed before, just
+  // reattached to the simpler animation.
+  if(center==='fit'){
+    flying=true;
+    map.once('moveend',()=>{flying=false;});
+    map.flyTo([lat,lon],GPS_INITIAL_ZOOM);
+  }else if(center==='pan'&&!flying)map.panTo([lat,lon]);
 }
-let watchId=null,following=false,needsFit=false,lastFix=null;
+let watchId=null,following=false,needsFit=false,lastFix=null,flying=false;
 // The blue dot always keeps tracking once started. Clicking a hydrant or an
 // empty spot, or dragging the map, only stops the CAMERA from following it
 // -- the position keeps updating in the background until "My location" is
