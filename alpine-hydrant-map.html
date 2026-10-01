@@ -1481,11 +1481,18 @@ function locate(zoomToFit){
     return;
   }
   btn.classList.add('busy');
-  // one quick fix first, so something shows up fast, then keep tracking continuously
+  // One quick (low-accuracy, network/cell-based, usually sub-second) fix
+  // first so the initial tween starts promptly -- the previous version of
+  // this asked for enableHighAccuracy:true (the slow GPS-chip path, often
+  // several seconds) FIRST and only fell back to the fast one on an
+  // outright error, not on mere slowness, so the normal case always paid
+  // the slow fix's latency. The high-accuracy watchPosition just below
+  // refines the position moments later with a smooth pan, not a second
+  // zoom change (needsFit is already cleared by the time it lands).
   navigator.geolocation.getCurrentPosition(applyFix,err=>{
     if(err.code===1)return locateFail(err);
-    navigator.geolocation.getCurrentPosition(applyFix,locateFail,{enableHighAccuracy:false,timeout:20000,maximumAge:60000});
-  },{enableHighAccuracy:true,timeout:10000,maximumAge:15000});
+    navigator.geolocation.getCurrentPosition(applyFix,locateFail,{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
+  },{enableHighAccuracy:false,timeout:8000,maximumAge:60000});
   watchId=navigator.geolocation.watchPosition(applyFix,locateFail,{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
 }
 $('locate').addEventListener('click',()=>locate(false));
