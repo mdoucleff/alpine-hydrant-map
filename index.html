@@ -1450,6 +1450,7 @@ function locateFail(err){
   // following over one bad tick, just leave things as they are.
   if(err.code!==1&&lastFix)return;
   stopTrackingHard();
+  if(!lastFix)fit(); // never got any fix at all -- widen to the full-town view instead of leaving the user zoomed into just the default town-centre area
   const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   const msg=err.code===1
     ?(ios?'Location is turned off for this page. On iPhone: Settings &rsaquo; Privacy &amp; Security &rsaquo; Location Services &rsaquo; Safari Websites &rarr; <b>While Using</b>. Then in Safari tap <b>aA</b> &rsaquo; Website Settings &rsaquo; Location &rarr; <b>Allow</b>, and reload.'
@@ -1511,7 +1512,14 @@ $('fit').addEventListener('click',fit);
 // map has ever had one, which this line is establishing for the first time.
 // Everything after this point (the "Fit Alpine" button, GPS zero-in) can
 // safely use the animated `fit`/flyToBounds.
-map.fitBounds(coreBounds.pad(.06)); // initial view: fit most of the city, not zoomed in past that
+// Start already at GPS_INITIAL_ZOOM, centred on town, rather than zoomed
+// out to fit the whole city -- so if/when the first GPS fix lands, that
+// jump (same zoom level, see findNear()'s center==='fit' branch) is just
+// a plain recentre, not a visible zoom change from a full-town overview
+// down to street level. If GPS never actually works, locateFail() widens
+// back out to the full-town view as a genuine fallback, not a transient
+// flash shown before every normal GPS fix.
+map.setView(coreBounds.getCenter(),GPS_INITIAL_ZOOM);
 styleRoads();styleMarkers();drawLabels();idle();
 // Data-accuracy disclaimer: must be explicitly accepted once per device
 // before GPS tracking starts. Bump DISCLAIMER_VERSION to make it reappear
