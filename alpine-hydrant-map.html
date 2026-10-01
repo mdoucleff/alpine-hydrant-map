@@ -1415,6 +1415,12 @@ function applyFix(p){
   btn.classList.remove('busy');
   try{
     const ll=[p.coords.latitude,p.coords.longitude];
+    // Remembered so the NEXT page load can start already roughly in the
+    // right place (see the initial map.setView below) instead of at the
+    // plain town centre -- saved on every fix, not just the first, so
+    // it's always the most recent known position, not whatever it
+    // happened to be on this session's very first fix.
+    try{localStorage.setItem('hydrantLastFix',ll[0]+','+ll[1]);}catch(e){}
     if(me)map.removeLayer(me);
     const layers=[L.circle(ll,{radius:p.coords.accuracy||0,renderer:routeRend,color:BLUE,weight:1,fillColor:BLUE,fillOpacity:.12,interactive:false})];
     // Heading is null whenever the device can't tell which way it's
@@ -1518,14 +1524,25 @@ $('fit').addEventListener('click',fit);
 // map has ever had one, which this line is establishing for the first time.
 // Everything after this point (the "Fit Alpine" button, GPS zero-in) can
 // safely use the animated `fit`/flyToBounds.
-// Start already at GPS_INITIAL_ZOOM, centred on town, rather than zoomed
-// out to fit the whole city -- so if/when the first GPS fix lands, that
-// jump (same zoom level, see findNear()'s center==='fit' branch) is just
-// a plain recentre, not a visible zoom change from a full-town overview
-// down to street level. If GPS never actually works, locateFail() widens
-// back out to the full-town view as a genuine fallback, not a transient
-// flash shown before every normal GPS fix.
-map.setView(coreBounds.getCenter(),GPS_INITIAL_ZOOM);
+// Start already at GPS_INITIAL_ZOOM, rather than zoomed out to fit the
+// whole city -- so if/when the first GPS fix lands, that jump (same zoom
+// level, see findNear()'s center==='fit' branch) is just a plain
+// recentre, not a visible zoom change from a full-town overview down to
+// street level. If GPS never actually works, locateFail() widens back
+// out to the full-town view as a genuine fallback, not a transient flash
+// shown before every normal GPS fix.
+// Centred on the last GPS fix this device ever reported, if we have one
+// saved (see applyFix()) -- a returning user starts out already roughly
+// in the right place, and the pan to the fresh fix becomes a small,
+// unobtrusive correction instead of a full town-centre-to-actual-location
+// jump every single visit. Falls back to the plain town centre for a
+// first-ever visit, or if the saved value is missing/corrupt.
+let startLL=coreBounds.getCenter();
+try{
+  const saved=(localStorage.getItem('hydrantLastFix')||'').split(',').map(Number);
+  if(saved.length===2&&saved.every(isFinite))startLL=saved;
+}catch(e){}
+map.setView(startLL,GPS_INITIAL_ZOOM);
 styleRoads();styleMarkers();drawLabels();idle();
 // Data-accuracy disclaimer: must be explicitly accepted once per device
 // before GPS tracking starts. Bump DISCLAIMER_VERSION to make it reappear
