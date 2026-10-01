@@ -763,9 +763,14 @@ function applyFix(p){
     // same anchor point) so it paints underneath the dot through plain
     // DOM/pane order, with no z-index needed.
     if(p.coords.heading!=null&&isFinite(p.coords.heading)){
+      // Bigger, a sharp point at the far/leading end (not the Google-Maps
+      // "wide cone" shape, which read as too faint/ambiguous at a glance),
+      // near-solid fill, and a white outline for contrast against any
+      // basemap color -- same treatment the dot's own white border and
+      // the hydrant icons' ring already use.
       layers.push(L.marker(ll,{interactive:false,keyboard:false,icon:L.divIcon({className:'',
-        html:'<svg class="me-hd" viewBox="0 0 24 40" width="24" height="40"><path d="M12 32 L4 2 L20 2 Z" fill="rgba(26,115,232,.55)" transform="rotate('+Math.round(p.coords.heading)+' 12 32)"/></svg>',
-        iconSize:[24,40],iconAnchor:[12,32]})}));
+        html:'<svg class="me-hd" viewBox="0 0 28 46" width="28" height="46"><path d="M6 36 L22 36 L14 4 Z" fill="rgba(26,115,232,.95)" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" transform="rotate('+Math.round(p.coords.heading)+' 14 38)"/></svg>',
+        iconSize:[28,46],iconAnchor:[14,38]})}));
     }
     layers.push(L.marker(ll,{interactive:false,keyboard:false,icon:L.divIcon({className:'',html:'<div class="me"></div>',iconSize:[18,18],iconAnchor:[9,9]})}));
     me=L.layerGroup(layers).addTo(map);
